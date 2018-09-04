@@ -23,7 +23,7 @@ Usage of MSP:
 ---
 
 
-Results:
+Sparse Results:
 ---
 1. Website image
 ![image](https://github.com/xiaohulugo/images/blob/master/web_result.jpg)
@@ -33,3 +33,7 @@ Results:
 
 3. Street image
 ![image](https://github.com/xiaohulugo/images/blob/master/street_result.jpg)
+
+Dense Results:
+---
+1. 
