@@ -1,5 +1,5 @@
 # MetricSfM
-A SfM framework for photogrammetry applications. The fold SfM contains source codes for sparse 3D reconstruction for both web-images and aerial-images. The fold MSP contains exe for dense reconstruction given the sparse result from the SfM.
+A SfM + MSP framework for photogrammetry applications. The fold SfM contains source codes for sparse 3D reconstruction for both web-images and aerial-images. The fold MSP contains exe for dense reconstruction given the sparse result from the SfM.
 
 Framework:
 ---
@@ -15,9 +15,13 @@ Prerequisites:
 
 Usage of SfM:
 ---
-1. build the project in fold SfM with Cmake
-2. put all the input images into a fold
-3. run test_sfm 
+1. build the project in fold SfM with Cmake (make sure no lib linking problems)
+2. put all the testing images into a fold
+3. run test_sfm.cc
 
 Usage of MSP:
+---
+
+
+Results:
 ---
