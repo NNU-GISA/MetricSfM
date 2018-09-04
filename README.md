@@ -25,3 +25,11 @@ Usage of MSP:
 
 Results:
 ---
+1. Website image
+![image](https://github.com/xiaohulugo/images/blob/master/web_result.jpg)
+
+2. Aerial image
+![image](https://github.com/xiaohulugo/images/blob/master/aerial_result.jpg)
+
+3. Street image
+![image](https://github.com/xiaohulugo/images/blob/master/street_result.jpg)
