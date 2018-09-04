@@ -3,4 +3,4 @@ A SfM framework for photogrammetry applications. The fold SfM contains source co
 
 Framework:
 ---
-![image](https://github.com/xiaohulugo/images/blob/master/sfm_framework.png)
+![image](https://github.com/xiaohulugo/images/blob/master/sfm_framework.png = 900x300 )
