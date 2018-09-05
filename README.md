@@ -21,9 +21,12 @@ Usage of SfM:
 
 Usage of MSP:
 ---
+1. Open MSP.exe in CMD at the MSP.exe folder. It will create a xml file named ms_proc_control_file.xml in the same fold
+2. Open ms_proc_control_file.xml, change the absolute file path of Ori_QIN.qin in the folder named undistorted_Img and set an output folder for the results. 
+3. In the CMD, run the command: MSP c:\...\...\...\ ms_proc_control_file.xml (absolute path).
+4. The results will be in the Output_Working_Directory.
 
-
-Sparse Results:
+SfM Results:
 ---
 1. Website image
 ![image](https://github.com/xiaohulugo/images/blob/master/web_result.jpg)
@@ -33,6 +36,9 @@ Sparse Results:
 
 3. Street image
 ![image](https://github.com/xiaohulugo/images/blob/master/street_result.jpg)
+
+MSP Results:
+---
 
 Dense Results:
 ---
