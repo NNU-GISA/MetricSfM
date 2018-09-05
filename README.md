@@ -39,7 +39,6 @@ SfM Results:
 
 MSP Results:
 ---
-
-Dense Results:
----
-1. 
+1. Aerial image
+![image](https://github.com/xiaohulugo/images/blob/master/msp1.bmp)
+![image](https://github.com/xiaohulugo/images/blob/master/msp2.bmp)
