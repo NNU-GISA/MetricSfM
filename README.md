@@ -39,6 +39,13 @@ SfM Results:
 
 MSP Results:
 ---
-1. Aerial image
-![image](https://github.com/xiaohulugo/images/blob/master/msp1.bmp)
+1. Satellite image
+![image](https://github.com/xiaohulugo/images/blob/master/msp_result1.bmp)
+
+2. Aerial image
+![image](https://github.com/xiaohulugo/images/blob/master/msp_result2.bmp)
+
+3. General image
+![image](https://github.com/xiaohulugo/images/blob/master/msp_result3.bmp)
+
 ![image](https://github.com/xiaohulugo/images/blob/master/msp2.bmp)
