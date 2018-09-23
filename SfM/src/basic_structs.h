@@ -158,7 +158,7 @@ namespace objectsfm
 		// localization
 		int th_seedpair_structures = 20;
 		int th_max_new_add_pts = 200;
-		int th_max_failure_localization = 5;
+		int th_max_failure_localization = 20;
 		int th_min_2d3d_corres = 20;
 
 		// bundle

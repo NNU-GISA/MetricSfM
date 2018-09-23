@@ -34,6 +34,8 @@ Point3D::Point3D()
 	is_mutable_ = true;
 	is_bad_estimated_ = false;
 	is_new_added_ = true;
+
+	data = new double[3];
 }
 
 Point3D::~Point3D()
@@ -357,6 +359,18 @@ bool Point3D::SufficientTriangulationAngle(double th_angle_triangulation)
 void Point3D::SetMutable(bool is_mutable)
 {
 	is_mutable_ = is_mutable;
+}
+
+void Point3D::ReleaseAll()
+{
+	for (std::map<int, Camera*>::iterator iter = cams_.begin(); iter != cams_.end(); iter++)
+	{
+		cams_.erase(iter);
+	}
+	for (std::map<int, Eigen::Vector2d>::iterator iter = pts2d_.begin(); iter != pts2d_.end(); iter++)
+	{
+		pts2d_.erase(iter);
+	}
 }
 
 }  // namespace objectsfm

@@ -405,6 +405,37 @@ namespace objectsfm
 			}
 			return sim;
 		}
+
+		std::vector<int> vector_subtract(int num, std::vector<int> data2)
+		{
+			std::sort(data2.begin(), data2.end());
+
+			std::vector<int> data3;
+			for (int i = 0; i < num; i++)
+			{
+				int v1 = i;
+				bool found = false;
+				for (int j = 0; j < data2.size(); j++)
+				{
+					int v2 = data2[j];
+					if (v2 == v1)
+					{
+						found = true;
+						break;
+					}
+					if (v2 > v1)
+					{
+						found = false;
+						break;
+					}
+				}
+				if (!found)
+				{
+					data3.push_back(v1);
+				}
+			}
+			return data3;
+		}
 	}
 
 	void FindCorrespondences(std::vector<int>& v1, std::vector<int>& v2, std::vector<int>& index)

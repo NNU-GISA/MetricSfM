@@ -23,11 +23,11 @@ void main(void)
 {
 	objectsfm::IncrementalSfM incremental_sfm;
 
-	std::string mode = "UAV"; // WEB, UAV 
-	incremental_sfm.options_.input_fold  = "F:\\DevelopCenter\\3DReconstruction\\3DModelingProject.git\\trunk\\data_sfm\\14\\image";
-	incremental_sfm.options_.output_fold = "F:\\DevelopCenter\\3DReconstruction\\3DModelingProject.git\\trunk\\data_sfm\\14\\result";
+	std::string mode = "WEB"; // WEB, UAV 
+	incremental_sfm.options_.input_fold  = "F:\\DevelopCenter\\3DReconstruction\\3DModelingProject.git\\trunk\\data_sfm\\15\\image";
+	incremental_sfm.options_.output_fold = "F:\\DevelopCenter\\3DReconstruction\\3DModelingProject.git\\trunk\\data_sfm\\15\\result";
 	incremental_sfm.options_.use_bow = true;
-	incremental_sfm.options_.num_image_voc = 500;
+	incremental_sfm.options_.num_image_voc = 1000;
 	incremental_sfm.options_.resize_image = 1600*1200;
 	incremental_sfm.options_.th_sim = 0.01;
 	incremental_sfm.options_.matching_graph_algorithm = "WordQuerying";  // FeatureDescriptor InvertedFile WordQuerying
@@ -40,8 +40,8 @@ void main(void)
 		incremental_sfm.options_.all_match = false;
 		incremental_sfm.options_.feature_type = "CUDASIFT"; // VLSIFT CUDASIFT CUDAASIFT
 		incremental_sfm.options_.use_same_camera = false;
-		incremental_sfm.options_.th_max_new_add_pts = 200;
-		incremental_sfm.options_.th_mse_localization = 7.0;
+		incremental_sfm.options_.th_max_new_add_pts = 300;
+		incremental_sfm.options_.th_mse_localization = 5.0;
 		incremental_sfm.options_.th_mse_reprojection = 3.0;
 		incremental_sfm.options_.th_mse_outliers = 1.0;
 	}

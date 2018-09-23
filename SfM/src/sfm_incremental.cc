@@ -304,11 +304,11 @@ namespace objectsfm {
 			cams_[1]->SetRTPose(cams_[0]->pos_rt_, rt_pose_21);
 
 			// draw
-			cv::Mat image1 = cv::imread(db_.image_paths_[id_img1]);
-			cv::Mat image2 = cv::imread(db_.image_paths_[id_img2]);
-			int pitch = 128;
-			cv::resize(image1, image1, cv::Size((image1.cols / pitch + 1) * pitch, (image1.rows / pitch + 1) * pitch));
-			cv::resize(image2, image2, cv::Size((image2.cols / pitch + 1) * pitch, (image2.rows / pitch + 1) * pitch));
+			//cv::Mat image1 = cv::imread(db_.image_paths_[id_img1]);
+			//cv::Mat image2 = cv::imread(db_.image_paths_[id_img2]);
+			//int pitch = 128;
+			//cv::resize(image1, image1, cv::Size((image1.cols / pitch + 1) * pitch, (image1.rows / pitch + 1) * pitch));
+			//cv::resize(image2, image2, cv::Size((image2.cols / pitch + 1) * pitch, (image2.rows / pitch + 1) * pitch));
 
 			// initial 3D structure via triangulation
 			for (size_t j = 0; j < matches.size(); j++)
@@ -330,10 +330,10 @@ namespace objectsfm {
 					db_.keypoints_[id_img2]->pts[id_pt2_local].pt.y,
 					id_pt2_global);
 
-				cv::Point2f offset1(db_.image_infos_[id_img1]->cols / 2.0, db_.image_infos_[id_img1]->rows / 2.0);
-				cv::Point2f offset2(db_.image_infos_[id_img2]->cols / 2.0, db_.image_infos_[id_img2]->rows / 2.0);
-				cv::line(image1, db_.keypoints_[id_img1]->pts[id_pt1_local].pt + offset1,
-					db_.keypoints_[id_img2]->pts[id_pt2_local].pt + offset2, cv::Scalar(0,0,255), 1);
+				//cv::Point2f offset1(db_.image_infos_[id_img1]->cols / 2.0, db_.image_infos_[id_img1]->rows / 2.0);
+				//cv::Point2f offset2(db_.image_infos_[id_img2]->cols / 2.0, db_.image_infos_[id_img2]->rows / 2.0);
+				//cv::line(image1, db_.keypoints_[id_img1]->pts[id_pt1_local].pt + offset1,
+				//	db_.keypoints_[id_img2]->pts[id_pt2_local].pt + offset2, cv::Scalar(0,0,255), 1);
 
 				if (pt_temp->Trianglate2(options_.th_mse_reprojection, options_.th_angle_small))
 				{
@@ -342,7 +342,7 @@ namespace objectsfm {
 					cams_[1]->AddPoints(pt_temp, id_pt2_global);
 				}
 			}
-			cv::imwrite("F:\\result.jpg", image1);
+			//cv::imwrite("F:\\result.jpg", image1);
 
 			db_.ReleaseImageFeatures(id_img1);
 			db_.ReleaseImageFeatures(id_img2);
@@ -685,6 +685,7 @@ namespace objectsfm {
 			if (error_reproj[i] > avg_error)
 			{
 				pts_[idx_3d]->is_bad_estimated_ = true;
+				pts_[idx_3d]->ReleaseAll();
 				continue;
 			}
 

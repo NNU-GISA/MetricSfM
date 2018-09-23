@@ -74,6 +74,8 @@ public:
 
 	bool ReadinImageKeyPoints(int idx);
 
+	bool ReleaseImageKeyPoints(int idx);
+
 	bool WriteoutImageFeature(int idx);
 
 	bool WriteoutImageFeature(int idx, std::string path);

@@ -42,6 +42,8 @@ namespace objectsfm {
 
 	public:
 
+		std::vector<int> CheckMissingMatchingFile();
+
 		bool GeoVerification(std::vector<cv::Point2f>& pt1, std::vector<cv::Point2f>& pt2, 
 			std::vector<int> &match_inliers);
 
@@ -53,11 +55,13 @@ namespace objectsfm {
 		//
 		bool CheckInitMatchGraph();
 
-		void WriteOutInitMatchGraph(std::vector<std::vector<int>> &match_graph_init);
+		void WriteOutInitMatchGraph(std::vector<std::vector<int>> &match_graph_init, int id_last);
 
-		void ReadinInitMatchGraph(std::vector<std::vector<int>> &match_graph_init);
+		void ReadinInitMatchGraph(std::vector<std::vector<int>> &match_graph_init, int &id_last);
 
 		void WriteOutMatchGraph();
+
+		void RecoverMatchingGraph(std::vector<int> &existing_matches);
 
 		//
 		bool CheckSimilarityGraph();

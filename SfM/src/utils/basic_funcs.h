@@ -190,6 +190,8 @@ namespace objectsfm
 		void keep_unique_idx_vector(std::vector<int> &data, std::vector<int> &unique_idx);
 
 		float vector_dot_float(float* ptr1, float* ptr2, int n);
+
+		std::vector<int> vector_subtract(int num, std::vector<int> data2);
 	}
 
 	namespace rotation 

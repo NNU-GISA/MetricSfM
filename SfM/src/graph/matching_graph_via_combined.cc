@@ -48,13 +48,8 @@ namespace objectsfm {
 		num_imgs_ = db_->num_imgs_;
 		match_graph_ = new int[num_imgs_*num_imgs_];
 
-		if (CheckMatchIndexFile())
-		{
-			return;
-		}
-
 		// step2: find initial matches via invertd file
-		if (!CheckInitMatchGraph())
+		//if (!CheckInitMatchGraph())
 		{
 			BuildInitialMatchGraph(match_all);
 		}
@@ -82,7 +77,14 @@ namespace objectsfm {
 		}
 		else
 		{
+			// step3: read in existing initial match rsults
+			int id_last_init_match = 0;
+			ReadinInitMatchGraph(match_graph_init, id_last_init_match);
+			if (id_last_init_match == num_imgs_ - 1)
+				return;
+
 			int th_num_match = MIN(MAX(100, num_imgs_ / 10), num_imgs_ - 1);
+			if (th_num_match > 500) th_num_match = 500;
 
 			// step1: generate similarity matrix via inverted file method
 			std::vector<std::vector<float>> similarity_matrix;
@@ -104,21 +106,25 @@ namespace objectsfm {
 			{
 				db_->ReadinWordsForImage(i);
 				std::vector<int> unique_word_idxs;
+				if (!db_->words_id_[i].size()) continue;
 				math::keep_unique_idx_vector(db_->words_id_[i], unique_word_idxs);
+
 				for (size_t j = 0; j < unique_word_idxs.size(); j++)
 				{
 					int idx = unique_word_idxs[j];
 					int id_word = db_->words_id_[i][idx];
 					pt_word_map[i].insert(std::pair<int, int>(id_word, idx));
 				}
+				db_->ReleaseWordsForImage(i);
 			}
 
-			// step3: do matching via quarying
 			for (size_t i = 0; i < num_imgs_; i++)
 			{
 				db_->ReadinImageKeyPoints(i);
 			}
-			for (size_t i = 0; i < num_imgs_; i++)
+
+			// step4: do matching via quarying
+			for (size_t i = id_last_init_match; i < num_imgs_; i++)
 			{
 				std::cout << i << std::endl;
 
@@ -199,29 +205,49 @@ namespace objectsfm {
 						match_graph_init[i].push_back(set_idx2[j]);
 					}
 				}
+
+				if (i % 100 == 0)
+				{
+					WriteOutInitMatchGraph(match_graph_init, idx1);
+				}
+			}
+
+			for (size_t i = 0; i < num_imgs_; i++)
+			{
+				db_->ReleaseImageKeyPoints(i);
 			}
 		}
 
 		//
-		WriteOutInitMatchGraph(match_graph_init);
+		WriteOutInitMatchGraph(match_graph_init, num_imgs_ - 1);
+		
 	}
 
 	void MatchingGraphViaCombined::RefineMatchGraphViaFlann()
 	{
+		// read in the existing matching results
+		std::vector<int> messing_matches = CheckMissingMatchingFile();
+		if (!messing_matches.size()) return;
+
+		std::vector<int> existing_matches = math::vector_subtract(num_imgs_, messing_matches);
+		RecoverMatchingGraph(existing_matches);
+
 		// read in the initial match graph
+		int id_last_init_match = 0;
 		std::vector<std::vector<int>> match_graph_init;
-		ReadinInitMatchGraph(match_graph_init);
+		ReadinInitMatchGraph(match_graph_init, id_last_init_match);
 
 		std::string file_match = db_->output_fold_ + "//match_index.txt";
 		std::ofstream of_match_index(file_match, std::ios::app);
-		for (size_t i = 0; i < num_imgs_; i++)
+		for (size_t i = 0; i < messing_matches.size(); i++)
 		{
-			std::cout << "---Matching images " << i << "/" << num_imgs_ << std::endl;
+			int idx1 = messing_matches[i];
+			std::cout << "---Matching images " << idx1 << "/" << num_imgs_ << std::endl;
 
-			int idx1 = i;
 			std::vector<int> set_idx2 = match_graph_init[idx1];
 			if (!set_idx2.size())
 			{
+				of_match_index << idx1 << std::endl;
 				continue;
 			}
 			db_->ReadinImageFeatures(idx1);
@@ -320,7 +346,44 @@ namespace objectsfm {
 		return true;
 	}
 
-	bool MatchingGraphViaCombined::GeoVerification(std::vector<cv::Point2f>& pt1, std::vector<cv::Point2f>& pt2, 
+	std::vector<int> MatchingGraphViaCombined::CheckMissingMatchingFile()
+	{
+		std::vector<int> missing_idx;
+
+		std::string path = db_->output_fold_ + "//match_index.txt";
+		std::ifstream infile(path);
+		if (!infile.good())
+		{
+			for (size_t i = 0; i < num_imgs_; i++)
+			{
+				missing_idx.push_back(i);
+			}
+			return missing_idx;
+		}
+
+		std::vector<int> index(num_imgs_, 0);
+		int idx = -1;
+		while (!infile.eof())
+		{
+			infile >> idx;
+			if (idx >= 0)
+			{
+				index[idx] = 1;
+			}
+		}
+		
+		for (size_t i = 0; i < num_imgs_; i++)
+		{
+			if (!index[i])
+			{
+				missing_idx.push_back(i);
+			}
+		}
+
+		return missing_idx;
+	}
+
+	bool MatchingGraphViaCombined::GeoVerification(std::vector<cv::Point2f>& pt1, std::vector<cv::Point2f>& pt2,
 		std::vector<int>& match_inliers)
 	{
 		if (pt1.size() < 30)
@@ -394,7 +457,7 @@ namespace objectsfm {
 		return true;
 	}
 
-	void MatchingGraphViaCombined::WriteOutInitMatchGraph(std::vector<std::vector<int>> &match_graph_init)
+	void MatchingGraphViaCombined::WriteOutInitMatchGraph(std::vector<std::vector<int>> &match_graph_init, int id_last)
 	{
 		std::string path = db_->output_fold_ + "//" + "init_match_graph.txt";
 		std::ofstream ofs(path);
@@ -404,6 +467,7 @@ namespace objectsfm {
 		}
 
 		ofs << match_graph_init.size() << std::endl;
+		ofs << id_last << std::endl;
 		for (size_t i = 0; i < match_graph_init.size(); i++)
 		{
 			ofs << match_graph_init[i].size() << " ";
@@ -416,17 +480,19 @@ namespace objectsfm {
 		ofs.close();
 	}
 
-	void MatchingGraphViaCombined::ReadinInitMatchGraph(std::vector<std::vector<int>>& match_graph_init)
+	void MatchingGraphViaCombined::ReadinInitMatchGraph(std::vector<std::vector<int>>& match_graph_init, int& id_last)
 	{
 		std::string path = db_->output_fold_ + "//" + "init_match_graph.txt";
 		std::ifstream ifs(path);
 		if (!ifs.is_open())
 		{
+			match_graph_init.resize(num_imgs_);
 			return;
 		}
 
 		int num_img = 0;
 		ifs >> num_img;
+		ifs >> id_last;
 		match_graph_init.resize(num_img);
 		for (size_t i = 0; i < match_graph_init.size(); i++)
 		{
@@ -455,6 +521,39 @@ namespace objectsfm {
 		}
 		ofs.write((const char*)match_graph_, db_->num_imgs_*db_->num_imgs_ * sizeof(int));
 		ofs.close();
+	}
+
+	void MatchingGraphViaCombined::RecoverMatchingGraph(std::vector<int>& existing_matches)
+	{
+		int num_imgs2 = num_imgs_ * num_imgs_;
+		for (size_t i = 0; i < num_imgs2; i++) {
+			match_graph_[i] = 0;
+		}
+
+		// read in data
+		for (size_t i = 0; i < existing_matches.size(); i++)
+		{
+			int idx = existing_matches[i];
+
+			std::string match_file = db_->output_fold_ + "//" + std::to_string(idx) + "_match";
+			std::ifstream ifs;
+			ifs.open(match_file, std::ios::in | std::ios::binary);
+			if (!ifs.is_open()) continue;
+
+			int id, num_match;
+			while (ifs.read((char*)(&id), sizeof(int)))
+			{
+				ifs.read((char*)(&num_match), sizeof(int));
+
+				int *temp = new int[num_match * 2];
+				ifs.read((char*)(temp), num_match * 2 * sizeof(int));
+				delete[] temp;
+
+				match_graph_[idx * num_imgs_ + id] = num_match;
+			}
+			ifs.close();
+		}
+		
 	}
 
 	bool MatchingGraphViaCombined::CheckSimilarityGraph()

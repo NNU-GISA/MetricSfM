@@ -423,6 +423,12 @@ bool Database::ReadinImageKeyPoints(int idx)
 	return true;
 }
 
+bool Database::ReleaseImageKeyPoints(int idx)
+{
+	std::vector<cv::KeyPoint>().swap(keypoints_[idx]->pts);
+	return true;
+}
+
 bool Database::WriteoutImageFeature(int idx)
 {
 	std::string path = output_fold_ + "//" + std::to_string(idx) + "_feature";
