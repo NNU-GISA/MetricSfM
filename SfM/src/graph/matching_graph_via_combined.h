@@ -34,9 +34,9 @@ namespace objectsfm {
 
 		void AssociateDatabase(Database* db);
 		
-		void BuildMatchGraph(bool match_all);
+		void BuildMatchGraph();
 
-		void BuildInitialMatchGraph(bool match_all);
+		void BuildInitialMatchGraph();
 
 		void RefineMatchGraphViaFlann();
 

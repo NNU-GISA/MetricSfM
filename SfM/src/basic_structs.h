@@ -174,6 +174,10 @@ namespace objectsfm
 
 		double th_angle_small = 5.0 / 180.0*3.1415;
 		double th_angle_large = 7.0 / 180.0*3.1415;
+
+		// matching graph
+		bool image_with_priori_pos = false;
+		std::string type_priori_pos = "xyz";  // xyz, xy, order
 	};
 
 	//
@@ -227,8 +231,8 @@ namespace objectsfm
 		bool use_bow = false;
 		bool use_gpu = false;
 		float th_sim = 0.01;
-		float all_match = false;
 		std::string sim_graph_type = "WordNumber";  // BoWDistance WordNumber
+		std::string matching_type = "All_Matching"; // Via_Feature  Via_Priori
 	};
 
 	// 

@@ -43,7 +43,7 @@ namespace objectsfm {
 		db_ = db;
 	}
 
-	void MatchingGraphViaCombined::BuildMatchGraph(bool match_all)
+	void MatchingGraphViaCombined::BuildMatchGraph()
 	{
 		num_imgs_ = db_->num_imgs_;
 		match_graph_ = new int[num_imgs_*num_imgs_];
@@ -51,7 +51,7 @@ namespace objectsfm {
 		// step2: find initial matches via invertd file
 		//if (!CheckInitMatchGraph())
 		{
-			BuildInitialMatchGraph(match_all);
+			BuildInitialMatchGraph();
 		}
 		
 		// step3: refine matches via flann matching
@@ -60,10 +60,10 @@ namespace objectsfm {
 		delete[] match_graph_;
 	}
 
-	void MatchingGraphViaCombined::BuildInitialMatchGraph(bool match_all)
+	void MatchingGraphViaCombined::BuildInitialMatchGraph()
 	{
 		std::vector<std::vector<int>> match_graph_init(num_imgs_);
-		if (match_all)
+		if (options_.matching_type == "All_Matching")
 		{
 			for (size_t i = 0; i < num_imgs_; i++)
 			{
@@ -74,6 +74,10 @@ namespace objectsfm {
 					}
 				}
 			}
+		}
+		else if (options_.matching_type == "Via_Priori")
+		{
+
 		}
 		else
 		{

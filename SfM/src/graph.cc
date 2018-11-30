@@ -54,7 +54,7 @@ namespace objectsfm {
 		MatchingGraphViaCombined grapher;
 		grapher.options_.use_gpu = options_.use_gpu;
 		grapher.AssociateDatabase(db_);
-		grapher.BuildMatchGraph(options_.all_match);
+		grapher.BuildMatchGraph();
 		return true;
 	}
 
