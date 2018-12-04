@@ -28,6 +28,7 @@
 #include <filesystem>
 #include <opencv2/opencv.hpp>
 #include "utils/basic_funcs.h"
+#include "utils/find_polynomial_roots_companion_matrix.h"
 #include "orientation/relative_pose_estimation.h"
 #include "orientation/absolute_pose_estimation.h"
 
@@ -51,23 +52,18 @@ namespace objectsfm {
 		db_.options.feature_type = options_.feature_type;
 		db_.options.resize_image = options_.resize_image;
 		db_.options.feature_type = options_.feature_type;
-		if (!db_.FeatureExtraction())
-		{
+		if (!db_.FeatureExtraction()) {
 			std::cout << "Error with the database" << std::endl;
 		}
 		is_img_processed_ = std::vector<bool>(db_.num_imgs_, false);
 		localize_fail_times_ = std::vector<int>(db_.num_imgs_, 0);
 
 		// graph
-		graph_.options_.all_match = options_.all_match;
-		graph_.options_.use_bow = options_.use_bow;
-		graph_.options_.th_sim = options_.th_sim;
-		graph_.options_.matching_graph_algorithm = options_.matching_graph_algorithm;
-		graph_.options_.use_gpu = options_.use_gpu;
-		graph_.options_.sim_graph_type = options_.sim_graph_type;
+		graph_.options_.matching_type = options_.matching_type;
+		graph_.options_.priori_type = options_.priori_type;
+		graph_.options_.priori_file = options_.priori_file;
 		graph_.AssociateDatabase(&db_);
-		if (!graph_.BuildGraph())
-		{
+		if (!graph_.BuildGraph()) {
 			std::cout << "Error with the graph" << std::endl;
 		}
 
@@ -117,8 +113,7 @@ namespace objectsfm {
 				std::vector<std::vector<std::pair<int, int>>> corres_2d3d;
 				std::vector<std::vector<int>> visible_cams;
 				FindImageToLocalize(image_ids, corres_2d3d, visible_cams);
-				if (!image_ids.size())
-				{
+				if (!image_ids.size()) {
 					break;
 				}
 				found_seed_ = true;
@@ -154,7 +149,7 @@ namespace objectsfm {
 
 				// do partial bundle adjustment for the added camera and all its visible cameras
 				int idx_new_cam = cams_.size() - 1;
-				PartialBundleAdjustment(idx_new_cam);
+				//PartialBundleAdjustment(idx_new_cam);
 				is_img_processed_[cams_[idx_new_cam]->id_img_] = true;
 				img_cam_map_.insert(std::pair<int, int>(cams_[idx_new_cam]->id_img_, idx_new_cam));
 
@@ -164,6 +159,9 @@ namespace objectsfm {
 				{
 					FullBundleAdjustment();
 				}
+				std::cout << cams_[0]->cam_model_->f_ << std::endl;
+				std::cout << cams_[0]->cam_model_->k1_ << std::endl;
+				std::cout << cams_[0]->cam_model_->k2_ << std::endl;
 
 				// remove new added outliers
 				RemovePointOutliers();
@@ -212,6 +210,8 @@ namespace objectsfm {
 
 			//id_img1 = 142; // 16, 17    7 8    124 317
 			//id_img2 = 143; // 52, 53
+
+			std::cout << id_img1 << " " << id_img2 << std::endl;
 
 			// load image features
 			db_.ReadinImageFeatures(id_img1);
@@ -571,6 +571,7 @@ namespace objectsfm {
 			pts_w[i] = Eigen::Vector3d(pts_[idx_3d]->data[0], pts_[idx_3d]->data[1], pts_[idx_3d]->data[2]);
 		}
 
+
 		/*
 		// draw
 		cv::Mat img_draw = cv::imread(db_.image_paths_[id_img]);
@@ -615,9 +616,9 @@ namespace objectsfm {
 		double avg_error = 0.0;
 		if (cam_new->cam_model_->f_)
 		{
-			AbsolutePoseEstimation::AbsolutePoseWithFocalLength(pts_w, pts_2d,
-				cam_new->cam_model_->f_, pose_absolute, error_reproj, avg_error);
-			if (avg_error > options_.th_mse_localization)
+			bool isOK = AbsolutePoseEstimation::AbsolutePoseWithFocalLength(pts_w, pts_2d,
+				cam_new->cam_model_, pose_absolute, error_reproj, avg_error, options_.th_mse_localization);
+			if (!isOK)
 			{
 				localize_fail_times_[id_img]++;
 
@@ -644,11 +645,9 @@ namespace objectsfm {
 		}
 		else
 		{
-			double f_estimated = MAX_(cam_new->cam_model_->h_, cam_new->cam_model_->w_)*1.2;
-			AbsolutePoseEstimation::AbsolutePoseWithoutFocalLength(pts_w, pts_2d,
-				f_estimated, pose_absolute, error_reproj, avg_error);
-
-			if (avg_error > options_.th_mse_localization)
+			bool isOK = AbsolutePoseEstimation::AbsolutePoseWithoutFocalLength(pts_w, pts_2d,
+				cam_new->cam_model_, pose_absolute, error_reproj, avg_error, options_.th_mse_localization);
+			if (!isOK)
 			{
 				localize_fail_times_[id_img]++;
 
@@ -661,7 +660,7 @@ namespace objectsfm {
 				// write out for debugging
 				std::string path = db_.output_fold_ + "//test_2.txt";
 				std::ofstream ofs(path);
-				ofs << f_estimated << std::endl;
+				ofs << cam_new->cam_model_->f_ << std::endl;
 				ofs << pts_w.size() << std::endl;
 				for (size_t i = 0; i < pts_w.size(); i++)
 				{
@@ -672,7 +671,6 @@ namespace objectsfm {
 
 				return false;
 			}
-			cam_new->SetFocalLength(f_estimated);
 		}
 		cam_new->SetRTPose(pose_absolute.R, pose_absolute.t);
 
@@ -685,7 +683,7 @@ namespace objectsfm {
 			if (error_reproj[i] > avg_error)
 			{
 				pts_[idx_3d]->is_bad_estimated_ = true;
-				pts_[idx_3d]->ReleaseAll();
+				//pts_[idx_3d]->ReleaseAll();
 				continue;
 			}
 
@@ -750,8 +748,7 @@ namespace objectsfm {
 
 			// determine the triangulation angle
 			double th_tri_angle = options_.th_angle_small;
-			if (matches.size() > 500)
-			{
+			if (matches.size() > 500) {
 				th_tri_angle = options_.th_angle_large;
 			}
 
@@ -1438,18 +1435,16 @@ namespace objectsfm {
 			int idx_cam_model = -1;
 			for (size_t i = 0; i < cam_models_.size(); i++)
 			{
-				if (!db_.image_infos_[cam->id_img_]->f_mm
-					|| !(db_.image_infos_[cam->id_img_]->cam_maker.length()
-						|| db_.image_infos_[cam->id_img_]->cam_model.length()))
-				{
-					continue;
-				}
+				//if (!db_.image_infos_[cam->id_img_]->f_mm
+				//	|| !(db_.image_infos_[cam->id_img_]->cam_maker.length()
+				//		|| db_.image_infos_[cam->id_img_]->cam_model.length()))
+				//{
+				//	continue;
+				//}
 
 				if (db_.image_infos_[cam->id_img_]->f_mm == cam_models_[i]->f_mm_
 					&& db_.image_infos_[cam->id_img_]->rows == cam_models_[i]->h_
-					&& db_.image_infos_[cam->id_img_]->cols == cam_models_[i]->w_
-					&& (db_.image_infos_[cam->id_img_]->cam_maker == cam_models_[i]->cam_maker_
-					|| db_.image_infos_[cam->id_img_]->cam_model == cam_models_[i]->cam_model_))
+					&& db_.image_infos_[cam->id_img_]->cols == cam_models_[i]->w_)
 				{
 					idx_cam_model = i;
 					break;
@@ -1579,6 +1574,11 @@ namespace objectsfm {
 			cams_[idx_new_cam]->AddVisibleCamera(idxs_visible_cam[i]);
 			cams_[idxs_visible_cam[i]]->AddVisibleCamera(idx_new_cam);
 		}
+	}
+
+	void IncrementalSfM::UndistortedPts(std::vector<Eigen::Vector2d> pts, std::vector<Eigen::Vector2d> &pts_undistorted, CameraModel* cam_model)
+	{
+		
 	}
 
 }  // namespace objectsfm

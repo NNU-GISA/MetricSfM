@@ -436,6 +436,38 @@ namespace objectsfm
 			}
 			return data3;
 		}
+
+		void vector_avg_denoise(std::vector<float>& data, int &count, float &result)
+		{
+			float avg = 0.0;
+			for (size_t i = 0; i < data.size(); i++) {
+				avg += data[i];
+			}
+			avg /= data.size();
+
+			float sigma = 0.0;
+			for (size_t i = 0; i < data.size(); i++) {
+				sigma += pow(data[i] - avg, 2);
+			}
+			sigma = sqrt(sigma / data.size());
+			if (sigma == 0) {
+				result = avg;
+				count = data.size();
+				return;
+			}
+
+			result = 0.0;
+			count = 0;
+			for (size_t i = 0; i < data.size(); i++)
+			{
+				float t = (data[i] - avg) / sigma;
+				if (t < 2.0) {
+					result += data[i];
+					count++;
+				}
+			}
+			result /= count;
+		}
 	}
 
 	void FindCorrespondences(std::vector<int>& v1, std::vector<int>& v2, std::vector<int>& index)

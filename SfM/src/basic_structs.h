@@ -176,8 +176,9 @@ namespace objectsfm
 		double th_angle_large = 7.0 / 180.0*3.1415;
 
 		// matching graph
-		bool image_with_priori_pos = false;
-		std::string type_priori_pos = "xyz";  // xyz, xy, order
+		std::string matching_type = "priori";
+		std::string priori_type = "llt";
+		std::string priori_file;
 	};
 
 	//
@@ -232,7 +233,12 @@ namespace objectsfm
 		bool use_gpu = false;
 		float th_sim = 0.01;
 		std::string sim_graph_type = "WordNumber";  // BoWDistance WordNumber
-		std::string matching_type = "All_Matching"; // Via_Feature  Via_Priori
+		std::string matching_type = "priori"; // Via_Feature  Via_Priori
+		std::string priori_type = "llt"; // llt xyz xy order
+		std::string priori_file;
+		int ellipsoid_id_ = 23; // WGS-84
+		std::string zone_id_ = "17N";
+		int knn = 50;
 	};
 
 	// 

@@ -37,6 +37,7 @@
 #include "utils/converter_utm_latlon.h"
 #include "utils/local_orientation.h"
 #include "utils/lsd.h"
+#include "utils/find_polynomial_roots_companion_matrix.h"
 
 namespace objectsfm {
 
@@ -93,8 +94,7 @@ bool Database::FeatureExtraction()
 		if (options.extract_gist)
 		{
 			WriteoutGistFeature();
-			for (size_t i = 0; i < num_imgs_; i++)
-			{
+			for (size_t i = 0; i < num_imgs_; i++) {
 				std::vector<float>().swap(gist_descriptors_[i]);
 			}
 		}
@@ -346,6 +346,165 @@ bool Database::ReadinImageFeatures(int idx)
 	{
 		keypoints_[idx]->pts[i].pt.x = ptr_temp[0];
 		keypoints_[idx]->pts[i].pt.y = ptr_temp[1];
+		ptr_temp += 2;
+	}
+	delete[] ptr_pts;
+
+	// read in descriptor
+	int rows, cols, type;
+	ifs.read((char*)(&rows), sizeof(int));
+	ifs.read((char*)(&cols), sizeof(int));
+	ifs.read((char*)(&type), sizeof(int));
+	descriptors_[idx]->release();
+	descriptors_[idx]->create(rows, cols, type);
+	ifs.read((char*)(descriptors_[idx]->data), descriptors_[idx]->elemSize() * descriptors_[idx]->total());
+
+	ifs.close();
+
+	return true;
+}
+
+bool Database::ReadinImageFeaturesUndistorted(int idx, CameraModel *cam_model)
+{
+	std::string path = output_fold_ + "//" + std::to_string(idx) + "_feature";
+	std::ifstream ifs(path, std::ios::binary);
+
+	if (!ifs.is_open()) {
+		return false;
+	}
+
+	//
+	image_infos_[idx] = new ImageInfo;
+	keypoints_[idx] = new ListKeyPoint;
+	descriptors_[idx] = new cv::Mat;
+
+	// read in image info
+	ifs.read((char*)(&image_infos_[idx]->rows), sizeof(int));
+	ifs.read((char*)(&image_infos_[idx]->cols), sizeof(int));
+	ifs.read((char*)(&image_infos_[idx]->zoom_ratio), sizeof(float));
+	ifs.read((char*)(&image_infos_[idx]->f_mm), sizeof(float));
+	ifs.read((char*)(&image_infos_[idx]->f_pixel), sizeof(float));
+	ifs.read((char*)(&image_infos_[idx]->gps_latitude), sizeof(float));
+	ifs.read((char*)(&image_infos_[idx]->gps_longitude), sizeof(float));
+
+	int size_cam_maker = 0;
+	ifs.read((char*)(&size_cam_maker), sizeof(int));
+	char *data_cam_maker = new char[size_cam_maker + 1];
+	ifs.read(data_cam_maker, size_cam_maker * sizeof(char));
+	data_cam_maker[size_cam_maker] = '\0';
+	image_infos_[idx]->cam_maker = data_cam_maker;
+
+	int size_cam_model = 0;
+	ifs.read((char*)(&size_cam_model), sizeof(int));
+	char *data_cam_model = new char[size_cam_model + 1];
+	ifs.read(data_cam_model, size_cam_model * sizeof(char));
+	data_cam_model[size_cam_model] = '\0';
+	image_infos_[idx]->cam_model = data_cam_model;
+
+	
+	// distortion 
+	double k1 = cam_model->k1_;
+	double k2 = cam_model->k2_;
+	double f = cam_model->f_;
+	Eigen::VectorXd polynomial(6);
+	polynomial[0] = pow(k2, 2);
+	polynomial[1] = 2 * k1 * k2;
+	polynomial[2] = 2 * k2 + pow(k1, 2);
+	polynomial[3] = 2 * k1;
+	polynomial[4] = 1.0;
+
+	if (0)
+	{
+		// test the calibration parameters
+		cv::Mat image = cv::imread(image_paths_[idx]);
+		int n = image.channels();
+		float ratio = image_infos_[idx]->zoom_ratio;
+		cv::resize(image, image, cv::Size(image.cols*ratio, image.rows*ratio));
+		cv::Mat img(2 * image.rows, 2 * image.cols, CV_8UC3, cv::Scalar(0, 0, 0));
+		uchar* ptr = image.data;
+		uchar* ptr_new = img.data;
+		int loc_pre = 0;
+		for (size_t i = 0; i < image.rows; i++)
+		{
+			cout << i << endl;
+			for (size_t j = 0; j < image.cols; j++)
+			{
+				double u = j - image.cols / 2.0;
+				double v = i - image.rows / 2.0;
+
+				Eigen::VectorXd real(5), imaginary(5);
+				polynomial[5] = -(u*u + v * v) / (f*f);
+				FindPolynomialRootsCompanionMatrix(polynomial, &real, &imaginary);
+				double r2 = 0;
+				for (size_t m = 0; m < 5; m++) {
+					if (imaginary[m] == 0) {
+						r2 = real[m];
+					}
+				}
+				if (r2 != 0) {
+					double d = 1 + k1 * r2 + k2 * r2 * r2;
+					u /= d;
+					v /= d;
+				}
+
+				int x = u + img.cols / 2;
+				int y = v + img.rows / 2;
+				if (x >= 0 && x<img.cols && y >= 0 && y<img.rows)
+				{
+					int loc = 3 * (y*img.cols + x);
+					ptr_new += loc - loc_pre;
+					ptr_new[0] = ptr[0];
+					ptr_new[1] = ptr[1];
+					ptr_new[2] = ptr[2];
+					loc_pre = loc;
+				}
+				ptr += 3;
+			}
+		}
+
+		cv::imwrite("F:\\rect_img.bmp", img);
+	}
+
+	// read in key points
+	int num_pts;
+	ifs.read((char*)(&num_pts), sizeof(int));
+	float* ptr_pts = new float[2 * num_pts];
+	ifs.read((char*)ptr_pts, 2 * sizeof(float)*num_pts);
+	keypoints_[idx]->pts.clear();
+	keypoints_[idx]->pts.resize(num_pts);
+	float* ptr_temp = ptr_pts;
+	for (size_t i = 0; i < num_pts; i++)
+	{
+		double u = ptr_temp[0];
+		double v = ptr_temp[1];
+
+		// undistortion
+		/* u = f * d * x
+		   v = f * d * y
+		   d = 1 + k1 * r2 + k2 * r4
+		   so, u2+v2 = f2*d2*(x*x+ y*y) = f2*d2*r2
+		             = f2*(1 + k1 * r2 + k2 * r4)2*r2
+					 = f2*(1 + k1 * r2 + k2 * r4)2*r2
+		*/
+		Eigen::VectorXd real(5), imaginary(5);
+		polynomial[5] = -(u*u + v * v) / (f*f);
+		FindPolynomialRootsCompanionMatrix(polynomial, &real, &imaginary);
+		double r2 = 0;
+		for (size_t j = 0; j < 5; j++)
+		{
+			if (imaginary[j] == 0) {
+				r2 = real[j];
+			}
+		}
+		if (r2 != 0) {
+			double d = 1 + k1 * r2 + k2 * r2 * r2;
+			keypoints_[idx]->pts[i].pt.x = u / d;
+			keypoints_[idx]->pts[i].pt.y = v / d;
+		}
+		else {
+			keypoints_[idx]->pts[i].pt.x = u;
+			keypoints_[idx]->pts[i].pt.y = v;
+		}
 		ptr_temp += 2;
 	}
 	delete[] ptr_pts;

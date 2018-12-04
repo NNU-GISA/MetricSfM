@@ -24,6 +24,7 @@
 
 #include "camera.h"
 #include "utils/basic_funcs.h"
+#include "utils/calibration.h"
 
 namespace objectsfm {
 
@@ -48,14 +49,18 @@ void Point3D::Trianglate(Camera * cam1, Eigen::Vector2d pt1, Camera * cam2, Eige
 	std::vector<Eigen::Vector3d> ray_directions;
 
 	Eigen::Vector3d origin1 = cam1->pos_ac_.c;
-	Eigen::Vector3d dir_c1(pt1(0), pt1(1), cam1->cam_model_->f_);
+	Eigen::Vector2d pt1_undistorted;
+	Calibration::UndistortedPts(pt1, pt1_undistorted, cam1->cam_model_);
+	Eigen::Vector3d dir_c1(pt1_undistorted(0), pt1_undistorted(1), cam1->cam_model_->f_);
 	Eigen::Vector3d dir_w1 = cam1->pos_rt_.R.transpose()*dir_c1;
 	dir_w1.normalize();
 	ray_origins.push_back(origin1);
 	ray_directions.push_back(dir_w1);
 
 	Eigen::Vector3d origin2 = cam2->pos_ac_.c;
-	Eigen::Vector3d dir_c2(pt2(0), pt2(1), cam2->cam_model_->f_);
+	Eigen::Vector2d pt2_undistorted;
+	Calibration::UndistortedPts(pt2, pt2_undistorted, cam2->cam_model_);
+	Eigen::Vector3d dir_c2(pt2_undistorted(0), pt2_undistorted(1), cam2->cam_model_->f_);
 	Eigen::Vector3d dir_w2 = cam2->pos_rt_.R.transpose()*dir_c2;
 	dir_w2.normalize();
 	ray_origins.push_back(origin2);
@@ -178,10 +183,15 @@ bool Point3D::Trianglate(double th_error, double th_angle)
 	int i = 0;
 	while (iter_cams != cams_.end())
 	{
+		// undistortion
+		Eigen::Vector2d pt_undistorted;
+		Calibration::UndistortedPts(iter_pts->second, pt_undistorted, iter_cams->second->cam_model_);
+
+		//
 		A.block<1, 4>(2 * i + 0, 0) = -iter_cams->second->M.row(1)* iter_cams->second->cam_model_->f_
-			+ iter_cams->second->M.row(2)*iter_pts->second(1);
-		A.block<1, 4>(2 * i + 1, 0) =  iter_cams->second->M.row(0)* iter_cams->second->cam_model_->f_
-			- iter_cams->second->M.row(2)*iter_pts->second(0);
+			+ iter_cams->second->M.row(2)*pt_undistorted[1];
+		A.block<1, 4>(2 * i + 1, 0) = iter_cams->second->M.row(0)* iter_cams->second->cam_model_->f_
+			- iter_cams->second->M.row(2)*pt_undistorted[0];
 		iter_cams++;
 		iter_pts++;
 		i++;
@@ -219,9 +229,14 @@ bool Point3D::Trianglate2(double th_error, double th_angle)
 	std::map<int, Eigen::Vector2d>::iterator iter_pts = pts2d_.begin();
 	while (iter_cams != cams_.end())
 	{
-		Eigen::Vector3d origin = iter_cams->second->pos_ac_.c;
-		Eigen::Vector3d dir_c(iter_pts->second(0), iter_pts->second(1), iter_cams->second->cam_model_->f_);
+		// undistortion
+		Eigen::Vector2d pt_undistorted;
+		Calibration::UndistortedPts(iter_pts->second, pt_undistorted, iter_cams->second->cam_model_);
+
+		//
+		Eigen::Vector3d dir_c(pt_undistorted[0], pt_undistorted[1], iter_cams->second->cam_model_->f_);
 		Eigen::Vector3d dir_w = iter_cams->second->pos_rt_.R.transpose()*dir_c;
+		Eigen::Vector3d origin = iter_cams->second->pos_ac_.c;
 		dir_w.normalize();
 
 		ray_origins.push_back(origin);

@@ -192,6 +192,8 @@ namespace objectsfm
 		float vector_dot_float(float* ptr1, float* ptr2, int n);
 
 		std::vector<int> vector_subtract(int num, std::vector<int> data2);
+
+		void vector_avg_denoise(std::vector<float> &data, int &count, float &result);
 	}
 
 	namespace rotation 

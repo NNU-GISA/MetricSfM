@@ -72,6 +72,8 @@ public:
 
 	bool ReadinImageFeatures(int idx);	
 
+	bool ReadinImageFeaturesUndistorted(int idx, CameraModel *cam_model);
+
 	bool ReadinImageKeyPoints(int idx);
 
 	bool ReleaseImageKeyPoints(int idx);
@@ -86,6 +88,7 @@ public:
 
 	bool ReadinGistFeature();
 
+
 	/* Vocabulary */
 
 	fbow::VocabularyCreator voc_creator_;
@@ -99,6 +102,7 @@ public:
 	void WriteoutVocabularyTree();
 
 	bool CheckVocabularyTreeExist();
+
 
 	/* Words*/
 	std::vector<fbow::fBow*> words_fbow_;
@@ -124,6 +128,7 @@ public:
 	void WriteoutWordsForImage(int idx, std::string path);
 
 	void ReleaseWordsForImage(int idx);
+
 
 	/* satellite image*/
 	std::string fold_dsm_, zone_id_;

@@ -518,14 +518,14 @@ namespace objectsfm {
 		}
 
 		// find homography
-		cv::Mat HMatrix = cv::findHomography(pt1, pt2);
-		double diag_sum = HMatrix.at<double>(1, 1) + HMatrix.at<double>(2, 2);
-		if (std::abs(HMatrix.at<double>(0, 0) - 1.0) < 0.05 &&
-			std::abs(HMatrix.at<double>(1, 1) - 1.0) < 0.05 &&
-			std::abs(HMatrix.at<double>(2, 2) - 1.0) < 0.05)
-		{
-			return false;
-		}
+		//cv::Mat HMatrix = cv::findHomography(pt1, pt2);
+		//double diag_sum = HMatrix.at<double>(1, 1) + HMatrix.at<double>(2, 2);
+		//if (std::abs(HMatrix.at<double>(0, 0) - 1.0) < 0.05 &&
+		//	std::abs(HMatrix.at<double>(1, 1) - 1.0) < 0.05 &&
+		//	std::abs(HMatrix.at<double>(2, 2) - 1.0) < 0.05)
+		//{
+		//	return false;
+		//}
 
 		std::vector<uchar> ransac_status(pt1.size());
 		cv::Mat FMatrix = cv::findFundamentalMat(pt1, pt2, ransac_status, cv::FM_RANSAC, 3.0);
