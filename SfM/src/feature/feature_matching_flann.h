@@ -14,34 +14,22 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#ifndef OBJECTSFM_FEATURE_MATCHING_CUDASIFT_H_
-#define OBJECTSFM_FEATURE_MATCHING_CUDASIFT_H_
+#ifndef OBJECTSFM_FEATURE_MATCHING_FLANN_H_
+#define OBJECTSFM_FEATURE_MATCHING_FLANN_H_
 
 #include <opencv2/opencv.hpp>
 
-#include "cudaSift/image.h"
-#include "cudaSift/sift.h"
-#include "cudaSift/utils.h"
 
 namespace objectsfm {
 
-class FeatureMatchingCudaSift
+class FeatureMatchingFlann
 {
 public:
-	FeatureMatchingCudaSift() {};
-	~FeatureMatchingCudaSift() {};
+	FeatureMatchingFlann() {};
+	~FeatureMatchingFlann() {};
 
-	static bool Run(std::vector<cv::KeyPoint>& kp1, cv::Mat & descriptors1, 
-		std::vector<cv::KeyPoint>& kp2, cv::Mat & descriptors2,
-		std::vector<std::pair<int, int>> &matches);
-
-	static bool Run(cudaSift::SiftData *siftdata1, cudaSift::SiftData *siftdata2, std::vector<std::pair<int, int>> &matches);
-
-	static void DataConvert(std::vector<cv::KeyPoint>& kp, cv::Mat & descriptors, cudaSift::SiftData *data);
-
-	static int ImproveHomography(cudaSift::SiftData &data, float *homography, int numLoops, float minScore, float maxAmbiguity, float thresh);
-
-	static bool GeoVerification(std::vector<cv::Point2f> &pt1, std::vector<cv::Point2f> &pt2, std::vector<int> &match_inliers);
+	static bool Run(cv::Mat *descriptors1,  std::vector<cv::Mat*> descriptors2, float th_ratio, float th_dis, 
+		std::vector<std::vector<std::pair<int, int>>> &matches);
 };
 
 }

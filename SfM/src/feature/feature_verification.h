@@ -14,8 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#ifndef OBJECTSFM_GEO_VERIFICATION_H_
-#define OBJECTSFM_GEO_VERIFICATION_H_
+#ifndef OBJECTSFM_FEATURE_VERIFICATION_H_
+#define OBJECTSFM_FEATURE_VERIFICATION_H_
 
 #include <vector>
 #include <string>
@@ -23,11 +23,11 @@
 
 namespace objectsfm 
 {
-	class GeoVerification
+	class FeatureVerification
 	{
 	public:
-		GeoVerification();
-		~GeoVerification();
+		FeatureVerification();
+		~FeatureVerification();
 
 		static bool GeoVerificationFundamental(std::vector<cv::Point2f>& pt1, std::vector<cv::Point2f>& pt2,
 			std::vector<int>& match_inliers);
@@ -37,6 +37,10 @@ namespace objectsfm
 
 		static bool GeoVerificationPatchFundamental(std::vector<cv::Point2f>& pt1, std::vector<cv::Point2f>& pt2,
 			std::vector<int>& match_inliers);
+
+		// cross check
+		static bool CrossCheck(std::vector<std::pair<int, int>> &matches1, std::vector<std::pair<int, int>> &matches2, 
+			std::vector<std::pair<int, int>> &matches_inliers);
 	};
 
 

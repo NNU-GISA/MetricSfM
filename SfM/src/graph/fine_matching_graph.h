@@ -36,24 +36,40 @@ namespace objectsfm {
 		
 		void BuildMatchGraph(std::vector<std::vector<int>> &match_graph_init);
 
+		void GraphMatching(std::vector<std::vector<int>> &match_graph_init);
+
+		void GraphVerification();
+
 	public:
 
+		bool CheckMatchIndexFile();
+
+		// initial matching
 		std::vector<int> CheckMissingMatchingFile();
 
-		//
-		bool CheckMatchIndexFile();
+		void RecoverMatchingGraph(std::vector<int> &existing_matches);
 
 		void WriteOutMatches(int idx1, int idx2, std::vector<std::pair<int, int>> &matches);
 
 		void WriteOutMatchGraph();
 
-		void RecoverMatchingGraph(std::vector<int> &existing_matches);
+		// 
+		std::vector<int> CheckMissingMatchingFile2();
+
+		void RecoverMatchingGraph2(std::vector<int> &existing_matches);
+
+		void WriteOutMatches2(int idx1, int idx2, std::vector<std::pair<int, int>> &matches);
+
+		void WriteOutMatchGraph2();
+
+		void ReadinMatch(int idx1, std::vector<int> &idx2, std::vector<std::vector<std::pair<int, int>>>  &matches);
 
 	public:
 		GraphOptions options_;
 		Database * db_;
 		int num_imgs_;
 		std::vector<std::vector<int>> match_graph;
+		std::vector<std::vector<int>> match_graph2;
 	};
 }
 #endif // OBJECTSFM_GRAPH_VIA_COMBINED_H_

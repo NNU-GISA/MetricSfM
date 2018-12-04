@@ -24,8 +24,7 @@
 #include "utils/basic_funcs.h"
 #include "utils/ellipsoid_utm_info.h"
 #include "utils/converter_utm_latlon.h"
-#include "utils/geo_verification.h"
-#include "feature/feature_matching.h"
+#include "feature/feature_verification.h"
 #include "flann/flann.h"
 
 namespace objectsfm {
@@ -238,7 +237,7 @@ namespace objectsfm {
 					pts2.push_back(db_->keypoints_[idx2]->pts[index2].pt);
 				}
 
-				if (!GeoVerification::GeoVerificationFundamental(pts1, pts2, match_init_inliers)) {
+				if (!FeatureVerification::GeoVerificationFundamental(pts1, pts2, match_init_inliers)) {
 					continue;
 				}
 

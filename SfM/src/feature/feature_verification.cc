@@ -14,20 +14,20 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#include "geo_verification.h"
+#include "feature_verification.h"
 
 #include "utils/basic_funcs.h"
 
 namespace objectsfm
 {
-	GeoVerification::GeoVerification()
+	FeatureVerification::FeatureVerification()
 	{
 	}
-	GeoVerification::~GeoVerification()
+	FeatureVerification::~FeatureVerification()
 	{
 	}
 
-	bool GeoVerification::GeoVerificationFundamental(std::vector<cv::Point2f>& pt1, std::vector<cv::Point2f>& pt2, std::vector<int>& match_inliers)
+	bool FeatureVerification::GeoVerificationFundamental(std::vector<cv::Point2f>& pt1, std::vector<cv::Point2f>& pt2, std::vector<int>& match_inliers)
 	{
 		if (pt1.size() < 30) {
 			return false;
@@ -56,7 +56,7 @@ namespace objectsfm
 		return true;
 	}
 
-	bool GeoVerification::GeoVerificationLocalFlow(std::vector<cv::Point2f>& pt1, std::vector<cv::Point2f>& pt2, std::vector<int>& match_inliers)
+	bool FeatureVerification::GeoVerificationLocalFlow(std::vector<cv::Point2f>& pt1, std::vector<cv::Point2f>& pt2, std::vector<int>& match_inliers)
 	{
 		int n = pt1.size();
 
@@ -131,7 +131,7 @@ namespace objectsfm
 		return true;
 	}
 
-	bool GeoVerification::GeoVerificationPatchFundamental(std::vector<cv::Point2f>& pt1, std::vector<cv::Point2f>& pt2, std::vector<int>& match_inliers)
+	bool FeatureVerification::GeoVerificationPatchFundamental(std::vector<cv::Point2f>& pt1, std::vector<cv::Point2f>& pt2, std::vector<int>& match_inliers)
 	{
 		if (pt1.size() < 20) {
 			return false;
@@ -197,5 +197,10 @@ namespace objectsfm
 			return false;
 		}
 		return true;
+	}
+
+	bool FeatureVerification::CrossCheck(std::vector<std::pair<int, int>>& matches1, std::vector<std::pair<int, int>>& matches2, std::vector<std::pair<int, int>>& matches_inliers)
+	{
+		return false;
 	}
 };
