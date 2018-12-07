@@ -38,7 +38,7 @@ namespace objectsfm {
 
 		void GraphMatching(std::vector<std::vector<int>> &match_graph_init);
 
-		void GraphVerification();
+		void MatchingVerification();
 
 	public:
 

@@ -70,5 +70,7 @@ namespace objectsfm {
 			delete[] knn_id[j];
 			delete[] knn_dis[j];
 		}
+
+		return true;
 	}
 }

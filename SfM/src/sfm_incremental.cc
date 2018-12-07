@@ -1,3 +1,4 @@
+
 // ObjectSfM - Object Based Structure-from-Motion.
 // Copyright (C) 2018  Ohio State University, CEGE, GDA group
 //
@@ -343,6 +344,9 @@ namespace objectsfm {
 				}
 			}
 			//cv::imwrite("F:\\result.jpg", image1);
+			cv::Mat img_match;
+			Drawmatch(id_img1, id_img2, img_match);
+			cv::imwrite("F:\\img_match_" + std::to_string(id_img1) + "_" + std::to_string(id_img2) + ".jpg", img_match);
 
 			db_.ReleaseImageFeatures(id_img1);
 			db_.ReleaseImageFeatures(id_img2);
@@ -1422,6 +1426,36 @@ namespace objectsfm {
 				pts_[i]->cams_.insert(std::pair<int, Camera*>(idx_local, cams_map_[id_cam]));
 			}
 		}
+	}
+
+	void IncrementalSfM::Drawmatch(int idx1, int idx2, cv::Mat & img)
+	{
+		db_.ReadinImageFeatures(idx1);
+		db_.ReadinImageFeatures(idx2);
+		cv::Mat image1 = cv::imread(db_.image_paths_[idx1]);
+		cv::Mat image2 = cv::imread(db_.image_paths_[idx2]);
+		float ratio1 = db_.image_infos_[idx1]->zoom_ratio;
+		float ratio2 = db_.image_infos_[idx2]->zoom_ratio;
+		//float ratio2 = db_->image_infos_[idx2]->zoom_ratio;
+
+		// query matches
+		std::vector<std::pair<int, int>> matchs_inliers;
+		graph_.QueryMatch(idx1, idx2, matchs_inliers);
+
+
+		int pitch = 128;
+		cv::resize(image1, image1, cv::Size(image1.cols*ratio1, image1.rows*ratio1));
+		cv::resize(image2, image2, cv::Size(image2.cols*ratio2, image2.rows*ratio2));
+		for (size_t m = 0; m < matchs_inliers.size(); m++)
+		{
+			int id_pt1_local = matchs_inliers[m].first;
+			int id_pt2_local = matchs_inliers[m].second;
+			cv::Point2f offset1(image1.cols / 2.0, image1.rows / 2.0);
+			cv::Point2f offset2(image2.cols / 2.0, image2.rows / 2.0);
+			cv::line(image1, db_.keypoints_[idx1]->pts[id_pt1_local].pt + offset1,
+				db_.keypoints_[idx2]->pts[id_pt2_local].pt + offset2, cv::Scalar(0, 0, 255), 1);
+		}
+		img = image1;
 	}
 
 	bool IncrementalSfM::CameraAssociateCameraModel(Camera * cam)

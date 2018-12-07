@@ -114,19 +114,49 @@ namespace objectsfm {
 
 	void InitialMatchingGraph::match_graph_priori_xy(std::vector<cv::Point2d>& pts)
 	{
+		double th_dis = 1.0;
+
+		// find close images
+		std::vector<std::pair<int, double>> id_dis(pts.size());
+		for (size_t i = 0; i < pts.size(); i++) {
+			id_dis[i].first = i;
+			id_dis[i].second = pts[i].x + pts[i].y;
+		}
+		std::sort(id_dis.begin(), id_dis.end(), [](const std::pair<int, double> &lhs, const std::pair<int, double> &rhs) { return lhs.second < rhs.second; });
+
+		std::vector<int> is_redundency(pts.size(), 0);
+		double dis_pre = id_dis[0].second - 100.0;
+		for (size_t i = 0; i < id_dis.size(); i++)
+		{
+			int idx = id_dis[i].first;
+			double dis = id_dis[i].second;
+			if (abs(dis - dis_pre) < th_dis) {
+				is_redundency[idx] = 1;
+			}
+			else {
+				dis_pre = dis;
+			}
+		}
+
+		// 
 		int k = MIN_(options_.knn, num_imgs_ / 10);
 		for (int i = 0; i < pts.size(); i++)
 		{
+			if (is_redundency[i]) {
+				continue;
+			}
+
 			std::vector<std::pair<int, double>> info;
 			for (int j = 0; j < pts.size(); j++) {
-				if (j != i) {
+				if (j != i && !is_redundency[j]) {
 					double dis = abs(pts[i].x - pts[j].x) + abs(pts[i].y - pts[j].y);
 					info.push_back(std::pair<int, double>(j, dis));
 				}
 			}
 
 			std::sort(info.begin(), info.end(), [](const std::pair<int, double> &lhs, const std::pair<int, double> &rhs) { return lhs.second < rhs.second; });	
-			for (size_t j = 0; j < k; j++) {
+			int t = MIN_(info.size(), k);
+			for (size_t j = 0; j < t; j++) {
 				match_graph_init[i].push_back(info[j].first);
 			}
 		}

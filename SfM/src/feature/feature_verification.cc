@@ -183,9 +183,19 @@ namespace objectsfm
 				continue;
 			}
 
-			float th_epipolar = 3.0;
+			float th_epipolar = 2.0;
 			std::vector<uchar> ransac_status(pt11.size());
 			cv::findFundamentalMat(pt11, pt22, ransac_status, cv::FM_RANSAC, th_epipolar);
+			int count_inliers = 0;
+			for (size_t j = 0; j < ransac_status.size(); j++) {
+				if (ransac_status[j]) {
+					count_inliers++;
+				}
+			}
+			if (count_inliers > 20) {
+				continue;
+			}
+
 			for (size_t j = 0; j < ransac_status.size(); j++) {
 				if (ransac_status[j]) {
 					match_inliers.push_back(grid[i][j]);
@@ -199,8 +209,35 @@ namespace objectsfm
 		return true;
 	}
 
-	bool FeatureVerification::CrossCheck(std::vector<std::pair<int, int>>& matches1, std::vector<std::pair<int, int>>& matches2, std::vector<std::pair<int, int>>& matches_inliers)
+	bool FeatureVerification::CrossCheck(std::vector<std::pair<int, int>>& matches1, std::vector<std::pair<int, int>>& matches2, 
+		std::vector<std::pair<int, int>>& matches_inliers)
 	{
+		//
+		int id2_max = 0;
+		for (size_t i = 0; i < matches2.size(); i++) {
+			if (matches2[i].first > id2_max) {
+				id2_max = matches2[i].first;
+			}
+		}
+		std::vector<int> m2(id2_max + 1);
+		for (size_t i = 0; i < matches2.size(); i++) {
+			m2[matches2[i].first] = matches2[i].second;
+		}
+
+		// cross check
+		for (size_t i = 0; i < matches1.size(); i++)
+		{
+			int id1 = matches1[i].first;
+			int id2 = matches1[i].second;
+			if (id2 <= id2_max && m2[id2] == id1) {
+				matches_inliers.push_back(matches1[i]);
+			}
+		}
+
+		if (matches_inliers.size() > 20) {
+			return true;
+		}
+
 		return false;
 	}
 };

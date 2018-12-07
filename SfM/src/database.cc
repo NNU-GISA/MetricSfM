@@ -697,7 +697,10 @@ void Database::ReleaseImageFeatures(int idx)
 {
 	delete image_infos_[idx];
 	std::vector<cv::KeyPoint>().swap(keypoints_[idx]->pts);
-	(*descriptors_[idx]).release();
+	if (descriptors_[idx]) {
+		(*descriptors_[idx]).release();
+	}
+	
 }
 
 bool Database::WriteoutGistFeature()

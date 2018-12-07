@@ -44,7 +44,7 @@ namespace objectsfm {
 		GraphMatching(match_graph_init);
 
 		// then verification
-		GraphVerification();
+		MatchingVerification();
 	}
 
 	void FineMatchingGraph::GraphMatching(std::vector<std::vector<int>> &match_graph_init)
@@ -94,7 +94,7 @@ namespace objectsfm {
 				int idx2 = set_idx2[j];
 				db_->ReleaseImageFeatures(idx2);
 				WriteOutMatches(idx1, idx2, matches[j]);
-				match_graph[idx1][idx2] = matches.size();
+				match_graph[idx1][idx2] = matches[j].size();
 			}
 
 			db_->ReleaseImageFeatures(idx1);
@@ -106,13 +106,13 @@ namespace objectsfm {
 		WriteOutMatchGraph();
 	}
 
-	void FineMatchingGraph::GraphVerification()
+	void FineMatchingGraph::MatchingVerification()
 	{
 		num_imgs_ = db_->num_imgs_;
-		std::string verify_type = "cross_check";
+		std::string verify_type = "geo_verify";
 
 		// read in the existing matching results
-		std::vector<int> messing_matches = CheckMissingMatchingFile();
+		std::vector<int> messing_matches = CheckMissingMatchingFile2();
 		if (!messing_matches.size()) return;
 
 		std::vector<int> existing_matches = math::vector_subtract(num_imgs_, messing_matches);
@@ -127,55 +127,112 @@ namespace objectsfm {
 			std::cout << "---Matching images " << idx1 << "/" << num_imgs_ << std::endl;
 
 			// read in initial matches
-			std::vector<int> idx2;
+			std::vector<int> idx2_list;
 			std::vector<std::vector<std::pair<int, int>>> matches_init;
-			ReadinMatch(idx1, idx2, matches_init);
+			ReadinMatch(idx1, idx2_list, matches_init);
 
 			// do verification
 			if (verify_type == "cross_check") {
-				for (size_t j = 0; j < idx2.size(); j++)
+				for (size_t j = 0; j < idx2_list.size(); j++)
 				{
+					int idx2 = idx2_list[j];
 					std::vector<int> idx_temp;
 					std::vector<std::vector<std::pair<int, int>>> matches_temp;
-					ReadinMatch(idx2[j], idx_temp, matches_temp);
+					ReadinMatch(idx2, idx_temp, matches_temp);
 
+					std::vector<std::pair<int, int>> matchs_inliers;
 					for (size_t m = 0; m < idx_temp.size(); m++) {
-						if (idx_temp[m] == idx1) {
-							std::vector<std::pair<int, int>> matchs_inliers;
+						if (idx_temp[m] == idx1) {	
 							FeatureVerification::CrossCheck(matches_init[j], matches_temp[m], matchs_inliers);
-
-							WriteOutMatches2(idx1, idx2[j], matchs_inliers);
-							match_graph[idx1][idx2[j]] = matchs_inliers.size();
+							WriteOutMatches2(idx1, idx2, matchs_inliers);
+							match_graph[idx1][idx2] = matchs_inliers.size();
 						}
-					}	
+					}
+
+					// draw
+					if (0)
+					{
+						db_->ReadinImageFeatures(idx1);
+						db_->ReadinImageFeatures(idx2);
+						cv::Mat image1 = cv::imread(db_->image_paths_[idx1]);
+						cv::Mat image2 = cv::imread(db_->image_paths_[idx2]);
+						float ratio1 = db_->image_infos_[idx1]->zoom_ratio;
+						float ratio2 = db_->image_infos_[idx2]->zoom_ratio;
+						//float ratio2 = db_->image_infos_[idx2]->zoom_ratio;
+
+						int pitch = 128;
+						cv::resize(image1, image1, cv::Size(image1.cols*ratio1, image1.rows*ratio1));
+						cv::resize(image2, image2, cv::Size(image2.cols*ratio2, image2.rows*ratio2));
+						for (size_t m = 0; m < matchs_inliers.size(); m++)
+						{
+							int id_pt1_local = matchs_inliers[m].first;
+							int id_pt2_local = matchs_inliers[m].second;
+							cv::Point2f offset1(image1.cols / 2.0, image1.rows / 2.0);
+							cv::Point2f offset2(image2.cols / 2.0, image2.rows / 2.0);
+							cv::line(image1, db_->keypoints_[idx1]->pts[id_pt1_local].pt + offset1,
+								db_->keypoints_[idx2]->pts[id_pt2_local].pt + offset2, cv::Scalar(0, 0, 255), 1);
+						}
+						std::string path = "F:\\" + std::to_string(idx2) + "cuda.jpg";
+						cv::imwrite(path, image1);
+					}
 				}
 			}
 			else if (verify_type == "geo_verify") {
-				db_->ReadinImageKeyPoints(idx1);
+				db_->ReadinImageFeatures(idx1);
 
-				for (size_t j = 0; j < idx2.size(); j++)
+				for (size_t j = 0; j < idx2_list.size(); j++)
 				{
-					db_->ReadinImageKeyPoints(idx2[j]);
+					int idx2 = idx2_list[j];
+					db_->ReadinImageFeatures(idx2);
 					std::vector<cv::Point2f> pt1, pt2;
 					for (size_t m = 0; m < matches_init[j].size(); m++)
 					{
 						int id1 = matches_init[j][m].first;
 						int id2 = matches_init[j][m].second;
 						pt1.push_back(db_->keypoints_[idx1]->pts[id1].pt);
-						pt2.push_back(db_->keypoints_[idx2[j]]->pts[id2].pt);
-						std::vector<int> inliers;
-						FeatureVerification::GeoVerificationPatchFundamental(pt1, pt2, inliers);
-
-						//
-						std::vector<std::pair<int, int>> matchs_inliers(inliers.size());
-						for (size_t n = 0; n < inliers.size(); n++) {
-							matchs_inliers[n] = matches_init[j][inliers[n]];
-						}
-						WriteOutMatches2(idx1, idx2[j], matchs_inliers);
-
-						db_->ReleaseImageFeatures(idx2[j]);
-						match_graph[idx1][idx2[j]] = matchs_inliers.size();
+						pt2.push_back(db_->keypoints_[idx2]->pts[id2].pt);
 					}
+					std::vector<int> inliers;
+					FeatureVerification::GeoVerificationPatchFundamental(pt1, pt2, inliers);
+
+					//
+					std::vector<std::pair<int, int>> matchs_inliers(inliers.size());
+					for (size_t n = 0; n < inliers.size(); n++) {
+						matchs_inliers[n] = matches_init[j][inliers[n]];
+					}
+					WriteOutMatches2(idx1, idx2, matchs_inliers);
+
+
+					// draw
+					if (0)
+					{
+						db_->ReadinImageFeatures(idx1);
+						db_->ReadinImageFeatures(idx2);
+						cv::Mat image1 = cv::imread(db_->image_paths_[idx1]);
+						cv::Mat image2 = cv::imread(db_->image_paths_[idx2]);
+						float ratio1 = db_->image_infos_[idx1]->zoom_ratio;
+						float ratio2 = db_->image_infos_[idx2]->zoom_ratio;
+						//float ratio2 = db_->image_infos_[idx2]->zoom_ratio;
+
+						int pitch = 128;
+						cv::resize(image1, image1, cv::Size(image1.cols*ratio1, image1.rows*ratio1));
+						cv::resize(image2, image2, cv::Size(image2.cols*ratio2, image2.rows*ratio2));
+						for (size_t m = 0; m < matchs_inliers.size(); m++)
+						{
+							int id_pt1_local = matchs_inliers[m].first;
+							int id_pt2_local = matchs_inliers[m].second;
+							cv::Point2f offset1(image1.cols / 2.0, image1.rows / 2.0);
+							cv::Point2f offset2(image2.cols / 2.0, image2.rows / 2.0);
+							cv::line(image1, db_->keypoints_[idx1]->pts[id_pt1_local].pt + offset1,
+								db_->keypoints_[idx2]->pts[id_pt2_local].pt + offset2, cv::Scalar(0, 0, 255), 1);
+						}
+						std::string path = "F:\\" + std::to_string(idx2) + "cuda.jpg";
+						cv::imwrite(path, image1);
+					}
+
+
+					db_->ReleaseImageFeatures(idx2);
+					match_graph[idx1][idx2] = matchs_inliers.size();
 				}
 			}
 			else {
