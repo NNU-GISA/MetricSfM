@@ -71,7 +71,7 @@ namespace objectsfm {
 
 	void Graph::ReadinMatchingGraph()
 	{
-		std::string path = db_->output_fold_ + "//" + "graph_matching2.txt";
+		std::string path = db_->output_fold_ + "//" + "graph_matching.txt";
 		std::ifstream ifs(path, std::ios::binary);
 		if (!ifs.is_open()) {
 			return;
@@ -92,7 +92,7 @@ namespace objectsfm {
 	void Graph::QueryMatch(int idx, std::vector<int>& image_ids, std::vector<std::vector<std::pair<int, int>>>& match_pts)
 	{
 		// read in data
-		std::string match_file = db_->output_fold_ + "//" + std::to_string(idx) + "_match2";
+		std::string match_file = db_->output_fold_ + "//" + std::to_string(idx) + "_match";
 		std::ifstream ifs;
 		ifs.open(match_file, std::ios::in | std::ios::binary);
 
