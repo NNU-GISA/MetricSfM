@@ -31,7 +31,7 @@ namespace objectsfm {
 		Calibration::UndistortedPts(pts_2d, pts_2d_undistorted, cam_model);
 
 		// pnp
-		double f_ratio_min = 0.5;
+		double f_ratio_min = 0.25;
 		double f_ratio_max = 4.00;
 		double error = 0.0;
 		double f_estimated = MAX_(cam_model->h_, cam_model->w_)*1.2;

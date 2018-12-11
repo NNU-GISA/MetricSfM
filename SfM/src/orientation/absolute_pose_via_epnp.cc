@@ -201,8 +201,7 @@ namespace objectsfm {
 		set_internal_parameters(0.0, 0.0, f, f);
 		set_maximum_number_of_correspondences(pts_w.size());
 		reset_correspondences();
-		for (int i = 0; i < pts_w.size(); ++i)
-		{
+		for (int i = 0; i < pts_w.size(); ++i) {
 			add_correspondence(pts_w[i](0), pts_w[i](1), pts_w[i](2), pts_2d[i](0), pts_2d[i](1));
 		}
 

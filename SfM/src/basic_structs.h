@@ -66,6 +66,14 @@ namespace objectsfm
 			UpdateDataFromModel();
 		}
 
+		void SetIntrisicParas(double f, double px, double py)
+		{
+			f_ = f;
+			px_ = px;
+			py_ = py;
+			UpdateDataFromModel();
+		}
+
 		void SetFocalLength(double f)
 		{
 			f_ = f;

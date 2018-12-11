@@ -67,6 +67,8 @@ public:
 
 	void ReadTempResultIn(std::string path);
 
+	void DrawMatch(int idx1, int idx2, cv::Mat &img);
+
 private:
 	bool CameraAssociateCameraModel(Camera* cam);
 

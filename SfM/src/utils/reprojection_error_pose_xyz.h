@@ -20,6 +20,8 @@
 #include "ceres/ceres.h"
 #include "ceres/rotation.h"
 
+#include <iostream>
+
 namespace objectsfm
 {
 	// pose: [0,1,2] are the angle-axis, [3,4,5] are the translation t.
@@ -34,14 +36,15 @@ namespace objectsfm
 			const T* const xyz,
 			T* residuals) const
 		{
-			// pose[0,1,2] are the angle-axis rotation.
-			T p[3];
-			ceres::AngleAxisRotatePoint(pose, xyz, p);
+			// pose[0,1,2] are the angle-axis rotation, pose[3,4,5] are the camera center
+			// Xc = R (Xw-c)
+			T xyz_temp[3];
+			xyz_temp[0] = xyz[0] - pose[3];
+			xyz_temp[1] = xyz[1] - pose[4];
+			xyz_temp[2] = xyz[2] - pose[5];
 
-			// pose[3,4,5] are the translation.
-			p[0] += pose[3];
-			p[1] += pose[4];
-			p[2] += pose[5];
+			T p[3];
+			ceres::AngleAxisRotatePoint(pose, xyz_temp, p);
 
 			// Compute the center of distortion. The sign change comes from
 			// the camera model that Noah Snavely's Bundler assumes, whereby
@@ -61,8 +64,16 @@ namespace objectsfm
 			const T predicted_y = focal * distortion * yp;
 
 			// The error is the difference between the predicted and observed position.
-			residuals[0] = weight*(predicted_x - observed_x);
-			residuals[1] = weight*(predicted_y - observed_y);
+			residuals[0] = weight * abs(predicted_x - observed_x);
+			residuals[1] = weight * abs(predicted_y - observed_y);
+
+			//const T th = T(10.0);
+			//if (residuals[0] > th || residuals[0] < -th || residuals[1] > th || residuals[1] < -th)
+			//{
+			//	std::cout << predicted_x << " " << observed_x << std::endl;
+			//	std::cout << predicted_y << " " << observed_y << std::endl;
+			//}
+			
 			
 			return true;
 		}

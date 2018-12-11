@@ -33,19 +33,20 @@ namespace objectsfm
 			T* residuals) const
 		{
 			// pose[0,1,2] are the angle-axis rotation.
-			T pose_T[6];
+			T pose_temp[6];
 			for (size_t i = 0; i < 6; i++)
 			{
-				pose_T[i] = T(pose[i]);
+				pose_temp[i] = T(pose[i]);
 			}
 
-			T p[3];
-			ceres::AngleAxisRotatePoint(pose_T, point, p);
+			T xyz_temp[3];
+			xyz_temp[0] = point[0] - T(pose[3]);
+			xyz_temp[1] = point[1] - T(pose[4]);
+			xyz_temp[2] = point[2] - T(pose[5]);
 
-			// pose[3,4,5] are the translation.
-			p[0] += pose_T[3];
-			p[1] += pose_T[4];
-			p[2] += pose_T[5];
+			T p[3];
+			ceres::AngleAxisRotatePoint(pose_temp, xyz_temp, p);
+
 
 			// Compute the center of distortion. The sign change comes from
 			// the camera model that Noah Snavely's Bundler assumes, whereby
