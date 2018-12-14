@@ -37,7 +37,7 @@ public:
 	IncrementalSfMOptions options_;
 
 	// the main pipeline
-	void Run(std::string file_slam, std::string file_gps, std::string file_rgb);
+	void Run(std::string fold);
 
 	// initialize
 	void ReadinSLAM(std::string file_slam);
@@ -56,16 +56,26 @@ public:
 
 	void GrawSLAM(std::string path);
 
+	void SaveUndistortedImage(std::string fold);
+
+	void SaveForSure(std::string fold);
+
+	void SaveforOpenMVS(std::string file);
+
+	void SaveforCMVS(std::string file);
+
 private:
 	BundleAdjustOptions bundle_full_options_;
 
-	int rows_, cols_;
+	int rows, cols;
 	double fx, fy, cx, cy;
+	double k1, k2, k3, p1, p2;
 
 	std::vector<CameraModel*> cam_models_; // camera models
 	std::vector<Camera*> cams_;  // cameras
 	std::vector<Point3D*> pts_;  // structures
 	std::vector<cv::Point2d> cams_gps_;  // camera pose from gps
+	std::vector<std::string> cams_name_;  // camera image name
 };
 
 }  // namespace objectsfm

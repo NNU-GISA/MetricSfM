@@ -44,36 +44,52 @@ namespace objectsfm {
 
 	SLAMGPS::SLAMGPS()
 	{
-		rows_ = 750;
-		cols_ = 1000;
+		rows = 750;
+		cols = 1000;
+		k1 = -0.25653475791443974829;
+		k2 = 0.08229711989891387580;
+		p1 = -0.00071314261865646465;
+		p2 = 0.00006466208069485206;
+		k3 = -0.01320155290268222939;
 	}
 
 	SLAMGPS::~SLAMGPS()
 	{
 	}
 
-	void SLAMGPS::Run(std::string file_slam, std::string file_gps, std::string file_rgb)
+	void SLAMGPS::Run(std::string fold)
 	{
 		// read in slam information
+		std::string file_slam = fold + "\\slam.txt";
 		ReadinSLAM(file_slam);
 
 		// read in gps
+		std::string file_gps = fold + "\\gps.txt";
 		std::map<int, cv::Point2d> gps_info;
 		ReadinGPS(file_gps, gps_info);
 
 		// accosiation
+		std::string file_rgb = fold + "\\rgb.txt";
 		AssociateCameraGPS(file_rgb, gps_info);
 
-		GrawGPS("F:\\pos_gps.bmp");
-		GrawSLAM("F:\\pos_slam1.bmp");
+		GrawGPS(fold + "\\gps_pos.bmp");
+		GrawSLAM(fold + "\\slam_pos1.bmp");
 
 		// do adjustment
 		FullBundleAdjustment();
 
+		// save
+		SaveUndistortedImage(fold);
+
+		SaveForSure(fold);
+
+		SaveforOpenMVS(fold);
+
+		SaveforCMVS(fold);
+
 		// write out
-		std::string outfile = "F:\\cam_pts.txt";
-		WriteCameraPointsOut(outfile);
-		GrawSLAM("F:\\pos_slam2.bmp");
+		WriteCameraPointsOut(fold + "\\slam_cam_pts.txt");
+		GrawSLAM(fold + "\\slam_pos2.bmp");
 	}
 
 	void SLAMGPS::ReadinSLAM(std::string file_slam)
@@ -142,7 +158,7 @@ namespace objectsfm {
 
 		// camera models
 		cam_models_.resize(1);
-		cam_models_[0] = new CameraModel(cam_models_.size(), rows_, cols_, (fx+fy)/2.0, 0.0, "lu", "lu");
+		cam_models_[0] = new CameraModel(cam_models_.size(), rows, cols, (fx+fy)/2.0, 0.0, "lu", "lu");
 		cam_models_[0]->SetIntrisicParas((fx + fy) / 2.0, cx, cy);
 		for (size_t i = 0; i < cams_.size(); i++)
 		{
@@ -178,6 +194,7 @@ namespace objectsfm {
 
 
 		std::vector<cv::Point2d> gps_all_frame;
+		std::vector<std::string> names_all_frame;
 		while (!ff.eof())
 		{
 			std::string s;
@@ -193,14 +210,17 @@ namespace objectsfm {
 				continue;
 			}
 			gps_all_frame.push_back(iter->second);
+			names_all_frame.push_back(name);
 		}
 
 		// gps of keyframes
 		cams_gps_.resize(cams_.size());
+		cams_name_.resize(cams_.size());
 		for (size_t i = 0; i < cams_.size(); i++)
 		{
 			int id_frame = cams_[i]->id_;
 			cams_gps_[i] = gps_all_frame[id_frame];
+			cams_name_[i] = names_all_frame[id_frame];
 		}
 	}
 
@@ -483,6 +503,261 @@ namespace objectsfm {
 			cv::putText(img, std::to_string(i), cv::Point(xx, yy), 1, 1, cv::Scalar(255, 0, 0));
 		}
 		cv::imwrite(path, img);
+	}
+
+	void SLAMGPS::SaveUndistortedImage(std::string fold)
+	{
+		// undistortion
+		cv::Mat K(3, 3, CV_64FC1);
+		K.at<double>(0, 0) = 450.495, K.at<double>(0, 1) = 0.0, K.at<double>(0, 2) = 499.215;
+		K.at<double>(1, 0) = 0.0, K.at<double>(1, 1) = 450.495, K.at<double>(1, 2) = 380.510;
+		K.at<double>(2, 0) = 0.0, K.at<double>(2, 1) = 0.0, K.at<double>(2, 2) = 1.0;
+
+		cv::Mat dist(1, 5, CV_64FC1);
+		dist.at<double>(0, 0) = -0.25653475791443974829;
+		dist.at<double>(0, 1) = 0.08229711989891387580;
+		dist.at<double>(0, 2) = -0.00071314261865646465;
+		dist.at<double>(0, 3) = 0.00006466208069485206;
+		dist.at<double>(0, 4) = -0.01320155290268222939;
+
+		//
+		std::string fold_rgb = fold + "\\rgb";
+		std::string fold_image = fold + "\\undistort_image";
+		if (!std::experimental::filesystem::exists(fold_image)) {
+			std::experimental::filesystem::create_directory(fold_image);
+		}
+
+		for (size_t i = 0; i < cams_.size(); i++)
+		{
+			// write out image
+			std::string path_in = fold_rgb + "\\" + cams_name_[i] + ".jpg";
+			std::string path_out = fold_image + "\\" + cams_name_[i] + ".jpg";
+			cv::Mat img = cv::imread(path_in);
+			cv::Mat img_undistort;
+			cv::undistort(img, img_undistort, K, dist);
+			cv::imwrite(path_out, img_undistort);
+		}
+	}
+
+	void SLAMGPS::SaveForSure(std::string fold)
+	{
+		// undistortion
+		cv::Mat K(3, 3, CV_64FC1);
+		K.at<double>(0, 0) = 450.495, K.at<double>(0, 1) = 0.0, K.at<double>(0, 2) = 499.215;
+		K.at<double>(1, 0) = 0.0, K.at<double>(1, 1) = 450.495, K.at<double>(1, 2) = 380.510;
+		K.at<double>(2, 0) = 0.0, K.at<double>(2, 1) = 0.0, K.at<double>(2, 2) = 1.0;
+
+		cv::Mat dist(1, 5, CV_64FC1);
+		dist.at<double>(0, 0) = -0.25653475791443974829;
+		dist.at<double>(0, 1) = 0.08229711989891387580;
+		dist.at<double>(0, 2) = -0.00071314261865646465;
+		dist.at<double>(0, 3) = 0.00006466208069485206;
+		dist.at<double>(0, 4) = -0.01320155290268222939;
+
+		//
+		std::string file_para = fold + "\\sfm_sure.txt";
+
+		FILE * fp;
+		fp = fopen(file_para.c_str(), "w+");
+		fprintf(fp, "%s\n", "fileName imageWidth imageHeight");
+		fprintf(fp, "%s\n", "camera matrix K [3x3]");
+		fprintf(fp, "%s\n", "radial distortion [3x1]");
+		fprintf(fp, "%s\n", "tangential distortion [2x1]");
+		fprintf(fp, "%s\n", "camera position t [3x1]");
+		fprintf(fp, "%s\n", "camera rotation R [3x3]");
+		fprintf(fp, "%s\n\n", "camera model P = K [R|-Rt] X");
+
+
+		for (size_t i = 0; i < cams_.size(); i++)
+		{
+			fprintf(fp, "%s %d %d\n", cams_name_[i] + ".jpg", cols, rows);
+			fprintf(fp, "%.8lf %.8lf %.8lf\n", fx, 0, cx);
+			fprintf(fp, "%.8lf %.8lf %.8lf\n", 0, fy, cy);
+			fprintf(fp, "%d %d %d\n", 0, 0, 1);
+			fprintf(fp, "%.8lf %.8lf %.8lf\n", k1, k2, k3);
+			fprintf(fp, "%.8lf %.8lf\n", p1, p2);
+			fprintf(fp, "%.8lf %.8lf %.8lf\n", cams_[i]->pos_rt_.t(0), cams_[i]->pos_rt_.t(1), cams_[i]->pos_rt_.t(2));
+			fprintf(fp, "%.8lf %.8lf %.8lf\n", cams_[i]->pos_rt_.R(0, 0), cams_[i]->pos_rt_.R(0, 1), cams_[i]->pos_rt_.R(0, 2));
+			fprintf(fp, "%.8lf %.8lf %.8lf\n", cams_[i]->pos_rt_.R(1, 0), cams_[i]->pos_rt_.R(1, 1), cams_[i]->pos_rt_.R(1, 2));
+			fprintf(fp, "%.8lf %.8lf %.8lf\n", cams_[i]->pos_rt_.R(2, 0), cams_[i]->pos_rt_.R(2, 1), cams_[i]->pos_rt_.R(2, 2));
+		}
+
+		fclose(fp);
+	}
+
+	void SLAMGPS::SaveforOpenMVS(std::string fold)
+	{
+		std::string file_para = fold + "\\sfm_openmvs.txt";
+
+		std::ofstream ff(file_para);
+		ff << std::fixed << std::setprecision(8);
+
+		// undistortion
+		cv::Mat K(3, 3, CV_64FC1);
+		K.at<double>(0, 0) = 450.495, K.at<double>(0, 1) = 0.0,     K.at<double>(0, 2) = 499.215;
+		K.at<double>(1, 0) = 0.0,     K.at<double>(1, 1) = 450.495, K.at<double>(1, 2) = 380.510;
+		K.at<double>(2, 0) = 0.0,     K.at<double>(2, 1) = 0.0,     K.at<double>(2, 2) = 1.0;
+
+		cv::Mat dist(1, 5, CV_64FC1);
+		dist.at<double>(0, 0) = -0.25653475791443974829;
+		dist.at<double>(0, 1) = 0.08229711989891387580;
+		dist.at<double>(0, 2) = -0.00071314261865646465;
+		dist.at<double>(0, 3) = 0.00006466208069485206;
+		dist.at<double>(0, 4) = -0.01320155290268222939;
+
+		// write out cams
+		ff << cams_.size() << std::endl;
+		for (size_t i = 0; i < cams_.size(); i++)
+		{
+			ff << cams_name_[i] + ".jpg" << std::endl;
+			ff << (fx + fy) / 2.0 << std::endl;
+			ff << cams_[i]->pos_rt_.R(0, 0) << " " << cams_[i]->pos_rt_.R(0, 1) << " " << cams_[i]->pos_rt_.R(0, 2) << " "
+				<< cams_[i]->pos_rt_.R(1, 0) << " " << cams_[i]->pos_rt_.R(1, 1) << " " << cams_[i]->pos_rt_.R(1, 2) << " "
+				<< cams_[i]->pos_rt_.R(2, 0) << " " << cams_[i]->pos_rt_.R(2, 1) << " " << cams_[i]->pos_rt_.R(2, 2) << std::endl;
+			ff << cams_[i]->pos_rt_.t(0) << " " << cams_[i]->pos_rt_.t(1) << " " << cams_[i]->pos_rt_.t(2) << std::endl;
+		}
+
+		//
+		std::map<int, int> cams_info;
+		for (size_t i = 0; i < cams_.size(); i++) {
+			cams_info.insert(std::pair<int, int>(cams_[i]->id_, i));
+		}
+
+		// write out points
+		int count_good = pts_.size();
+		std::vector<int> num_goods(pts_.size(), 0);
+		for (size_t i = 0; i < pts_.size(); i++)
+		{
+			auto it1 = pts_[i]->pts2d_.begin();
+			int count_t = pts_[i]->pts2d_.size();
+			while (it1 != pts_[i]->pts2d_.end())
+			{
+				int x = it1->second(0) + cx;
+				int y = it1->second(1) + cy;
+				if (x<0 || x>=cols || y<0 || y >= rows)
+				{
+					count_t--;
+				}
+				it1++;
+			}
+
+			num_goods[i] = count_t;
+			if (count_t < 2)
+			{
+				count_good--;
+			}
+		}
+
+		ff << count_good << std::endl;
+		for (size_t i = 0; i < pts_.size(); i++)
+		{
+			if (num_goods[i] < 2)
+			{
+				continue;
+			}
+
+			ff << pts_[i]->data[0] << " " << pts_[i]->data[1] << " " << pts_[i]->data[2] << " ";
+			ff << 255 << " " << 255 << " " << 255 << " ";
+			ff << num_goods[i] << std::endl;
+
+			auto it1 = pts_[i]->pts2d_.begin();
+			auto it2 = pts_[i]->cams_.begin();
+			while (it1 != pts_[i]->pts2d_.end())
+			{
+				int id_cam = it2->second->id_;
+				std::map<int, int >::iterator iter = cams_info.find(id_cam);
+
+				int x = it1->second(0) + cx;
+				int y = it1->second(1) + cy;
+				if (!(x < 0 || x >= cols || y < 0 || y >= rows))
+				{
+					ff << iter->second << " " << x << " " << y << std::endl;
+				}				
+				it1++;  it2++;
+			}
+		}
+		ff.close();
+	}
+
+	void SLAMGPS::SaveforCMVS(std::string fold)
+	{
+		std::string file_para = fold + "\\sfm_cmvs.txt";
+
+		int count_good = pts_.size();
+		std::vector<int> num_goods(pts_.size(), 0);
+		for (size_t i = 0; i < pts_.size(); i++)
+		{
+			auto it1 = pts_[i]->pts2d_.begin();
+			int count_t = pts_[i]->pts2d_.size();
+			while (it1 != pts_[i]->pts2d_.end())
+			{
+				int x = it1->second(0) + cx;
+				int y = it1->second(1) + cy;
+				if (x<0 || x >= cols || y<0 || y >= rows)
+				{
+					count_t--;
+				}
+				it1++;
+			}
+
+			num_goods[i] = count_t;
+			if (count_t < 2)
+			{
+				count_good--;
+			}
+		}
+
+		//
+		std::ofstream ff(file_para);
+		ff << std::fixed << std::setprecision(8);
+
+		// cams
+		ff << "# Bundle file v0.3" << std::endl;
+		ff << cams_.size() << " " << count_good << std::endl;
+		for (size_t i = 0; i < cams_.size(); i++)
+		{
+			ff << (fx + fy) / 2.0 << " " << 0.0 << " " << 0.0 << std::endl;
+			ff << cams_[i]->pos_rt_.R(0, 0) << " " << cams_[i]->pos_rt_.R(0, 1) << " " << cams_[i]->pos_rt_.R(0, 2) << " "
+				<< cams_[i]->pos_rt_.R(1, 0) << " " << cams_[i]->pos_rt_.R(1, 1) << " " << cams_[i]->pos_rt_.R(1, 2) << " "
+				<< cams_[i]->pos_rt_.R(2, 0) << " " << cams_[i]->pos_rt_.R(2, 1) << " " << cams_[i]->pos_rt_.R(2, 2) << std::endl;
+			ff << cams_[i]->pos_rt_.t(0) << " " << cams_[i]->pos_rt_.t(1) << " " << cams_[i]->pos_rt_.t(2) << std::endl;
+		}
+
+		// points
+		std::map<int, int> cams_info;
+		for (size_t i = 0; i < cams_.size(); i++) {
+			cams_info.insert(std::pair<int, int>(cams_[i]->id_, i));
+		}
+
+		for (size_t i = 0; i < pts_.size(); i++)
+		{
+			if (num_goods[i] < 2)
+			{
+				continue;
+			}
+
+			ff << pts_[i]->data[0] << " " << pts_[i]->data[1] << " " << pts_[i]->data[2] << " ";
+			ff << 255 << " " << 255 << " " << 255 << " ";
+			ff << num_goods[i] << std::endl;
+
+			auto it1 = pts_[i]->pts2d_.begin();
+			auto it2 = pts_[i]->cams_.begin();
+			while (it1 != pts_[i]->pts2d_.end())
+			{
+				int idx_pt = it2->first;
+				int id_cam = it2->second->id_;
+				std::map<int, int >::iterator iter = cams_info.find(id_cam);
+
+				int x = it1->second(0) + cx;
+				int y = it1->second(1) + cy;
+				if (!(x < 0 || x >= cols || y < 0 || y >= rows))
+				{
+					ff << iter->second << " " << idx_pt << " " << x << " " << y << std::endl;
+				}
+				it1++;  it2++;
+			}
+		}
+		ff.close();
 	}
 
 }  // namespace objectsfm
