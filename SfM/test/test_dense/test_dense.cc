@@ -17,12 +17,12 @@
 #include <iostream>
 #include <fstream>
 #include "basic_structs.h"
-#include "slam_gps.h"
+#include "dense_reconstruction.h"
 
 void main(void)
 {
-	objectsfm::SLAMGPS slamgps;
+	objectsfm::DenseReconstruction denser;
 
 	std::string fold = "F:\\Database\\GoPro\\11-20\\1114_HERO7_data\\front\\GX020005";
-	slamgps.Run(fold);
+	denser.Run(fold);
 }

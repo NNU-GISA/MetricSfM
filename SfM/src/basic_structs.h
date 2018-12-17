@@ -258,6 +258,12 @@ namespace objectsfm
 	};
 
 	//
+	struct DenseOptions
+	{
+	};
+
+
+	//
 	struct ListKeyPoint
 	{
 		std::vector<cv::KeyPoint> pts;

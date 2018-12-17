@@ -14,15 +14,33 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#include <iostream>
-#include <fstream>
+#ifndef OBJECTSFM_SYSTEM_DENSE_H_
+#define OBJECTSFM_SYSTEM_DENSE_H_
+
 #include "basic_structs.h"
-#include "slam_gps.h"
+#include "database.h"
+#include "camera.h"
+#include "structure.h"
+#include "optimizer.h"
 
-void main(void)
+namespace objectsfm {
+
+
+class DenseReconstruction
 {
-	objectsfm::SLAMGPS slamgps;
+public:
+	DenseReconstruction();
+	~DenseReconstruction();
 
-	std::string fold = "F:\\Database\\GoPro\\11-20\\1114_HERO7_data\\front\\GX020005";
-	slamgps.Run(fold);
-}
+	DenseOptions options_;
+
+	// the main pipeline
+	void Run(std::string fold);
+
+private:
+
+};
+
+}  // namespace objectsfm
+
+#endif  // OBJECTSFM_SYSTEM_DENSE_H_

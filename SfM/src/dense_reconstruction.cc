@@ -14,15 +14,37 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#include <iostream>
+#ifndef MAX_
+#define MAX_(a,b) ( ((a)>(b)) ? (a):(b) )
+#endif // !MAX
+
+#ifndef MIN_
+#define MIN_(a,b) ( ((a)<(b)) ? (a):(b) )
+#endif // !MIN_
+
+#include "dense_reconstruction.h"
+
 #include <fstream>
-#include "basic_structs.h"
-#include "slam_gps.h"
+#include <filesystem>
+#include <iomanip>
 
-void main(void)
-{
-	objectsfm::SLAMGPS slamgps;
+#include <opencv2/opencv.hpp>
 
-	std::string fold = "F:\\Database\\GoPro\\11-20\\1114_HERO7_data\\front\\GX020005";
-	slamgps.Run(fold);
-}
+#include "utils/basic_funcs.h"
+
+
+namespace objectsfm {
+
+	DenseReconstruction::DenseReconstruction()
+	{
+	}
+
+	DenseReconstruction::~DenseReconstruction()
+	{
+	}
+
+	void DenseReconstruction::Run(std::string fold)
+	{
+	}
+
+}  // namespace objectsfm

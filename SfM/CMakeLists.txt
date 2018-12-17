@@ -67,6 +67,7 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib)
 include_directories(
 ${PROJECT_SOURCE_DIR}
 ${PROJECT_SOURCE_DIR}/src
+${PROJECT_SOURCE_DIR}/src/depth/cudasgm/include
 ${PROJECT_SOURCE_DIR}/thirdparty
 ${OpenCV_INCLUDE_DIRS}
 ${Boost_INCLUDE_DIRS}
@@ -80,51 +81,66 @@ ${FLANN_INCLUDE_DIRS}
 ${GDAL_INCLUDE_DIRS}
 )
 
-FILE(GLOB OBJ_HDRS  "src/*.h" "src/utils/*.hpp")
-FILE(GLOB OBJ_SRCS  "src/*.c" "src/*.cc" "src/*.cpp")
-source_group(src FILES ${OBJ_HDRS} ${OBJ_SRCS})
-
-FILE(GLOB Feature_HDRS  "src/feature/*.h" "src/utils/*.hpp")
-FILE(GLOB Feature_SRCS  "src/feature/*.c" "src/feature/*.cc" "src/feature/*.cpp")
-source_group(feature FILES ${Feature_HDRS} ${Feature_SRCS})
-
-FILE(GLOB Graph_HDRS  "src/graph/*.h" "src/utils/*.hpp")
-FILE(GLOB Graph_SRCS  "src/graph/*.c" "src/graph/*.cc" "src/graph/*.cpp")
-source_group(graph FILES ${Graph_HDRS} ${Graph_SRCS})
-
-FILE(GLOB Orientation_HDRS  "src/orientation/*.h" "src/utils/*.hpp")
-FILE(GLOB Orientation_SRCS  "src/orientation/*.c" "src/orientation/*.cc" "src/graph/*.cpp")
-source_group(orientation FILES ${Orientation_HDRS} ${Orientation_SRCS})
-
 FILE(GLOB Utils_HDRS  "src/utils/*.h" "src/utils/*.hpp")
 FILE(GLOB Utils_SRCS  "src/utils/*.c" "src/utils/*.cc" "src/utils/*.cpp")
 source_group(utils FILES ${Utils_HDRS} ${Utils_SRCS})
 
-cuda_add_library(${PROJECT_NAME} 
+SET(Basic_Files  
+src/basic_structs.h
+src/camera.h src/camera.cc
+src/database.h src/database.cc
+src/optimizer.h src/optimizer.cc
+src/structure.h src/structure.cc
+)
+
+#### SfM
+SET(SFM_Files src/sfm_incremental.h src/sfm_incremental.cc)
+FILE(GLOB Feature_HDRS  "src/feature/*.h" "src/utils/*.hpp")
+FILE(GLOB Feature_SRCS  "src/feature/*.c" "src/feature/*.cc" "src/feature/*.cpp")
+source_group(feature FILES ${Feature_HDRS} ${Feature_SRCS})
+FILE(GLOB Graph_HDRS  "src/graph/*.h" "src/utils/*.hpp")
+FILE(GLOB Graph_SRCS  "src/graph/*.c" "src/graph/*.cc" "src/graph/*.cpp")
+source_group(graph FILES ${Graph_HDRS} ${Graph_SRCS})
+FILE(GLOB Orientation_HDRS  "src/orientation/*.h" "src/utils/*.hpp")
+FILE(GLOB Orientation_SRCS  "src/orientation/*.c" "src/orientation/*.cc" "src/graph/*.cpp")
+source_group(orientation FILES ${Orientation_HDRS} ${Orientation_SRCS})
+cuda_add_library(SFMLib 
 STATIC 
-${OBJ_HDRS}          ${OBJ_SRCS} 
+${Basic_Files}
+${SFM_Files}
 ${Feature_HDRS}      ${Feature_SRCS}
 ${Graph_HDRS}        ${Graph_SRCS}
 ${Orientation_HDRS}  ${Orientation_SRCS}
 ${Utils_HDRS}        ${Utils_SRCS}
 )
+target_link_libraries(SFMLib legacy_stdio_definitions.lib shlwapi.lib
+${CMAKE_DL_LIBS} ${OpenCV_LIBS} ${Boost_LIBRARIES})
+target_link_libraries(SFMLib debug ${FBOW_LIBRARIES_DEBUG} optimized ${FBOW_LIBRARIES_RELEASE})
+target_link_libraries(SFMLib debug ${GFLAGS_LIBRARY_DEBUG_ONE} optimized ${GFLAGS_LIBRARY_RELEASE_ONE})
+target_link_libraries(SFMLib debug ${GFLAGS_LIBRARY_DEBUG_TWO} optimized ${GFLAGS_LIBRARY_RELEASE_TWO})
+target_link_libraries(SFMLib debug ${GLOG_LIBRARIES_DEBUG} optimized ${GLOG_LIBRARIES_RELEASE})
+target_link_libraries(SFMLib debug ${CERES_LIBRARIES_DEBUG} optimized ${CERES_LIBRARIES_RELEASE})
+target_link_libraries(SFMLib debug ${VLFEAT_LIBRARIES_DEBUG} optimized ${VLFEAT_LIBRARIES_RELEASE})
+target_link_libraries(SFMLib debug ${CUDASIFT_LIBRARIES_DEBUG} optimized ${CUDASIFT_LIBRARIES_RELEASE})
+target_link_libraries(SFMLib debug ${FLANN_LIBRARIES_DEBUG} optimized ${FLANN_LIBRARIES_RELEASE})
+target_link_libraries(SFMLib debug ${GDAL_LIBRARIES_DEBUG} optimized ${GDAL_LIBRARIES_RELEASE})
 
-target_link_libraries(${PROJECT_NAME}
-legacy_stdio_definitions.lib
-shlwapi.lib
-${CMAKE_DL_LIBS}
-${OpenCV_LIBS}
-${Boost_LIBRARIES}
-)
 
-target_link_libraries(${PROJECT_NAME} debug ${FBOW_LIBRARIES_DEBUG} optimized ${FBOW_LIBRARIES_RELEASE})
-target_link_libraries(${PROJECT_NAME} debug ${GFLAGS_LIBRARY_DEBUG_ONE} optimized ${GFLAGS_LIBRARY_RELEASE_ONE})
-target_link_libraries(${PROJECT_NAME} debug ${GFLAGS_LIBRARY_DEBUG_TWO} optimized ${GFLAGS_LIBRARY_RELEASE_TWO})
-target_link_libraries(${PROJECT_NAME} debug ${GLOG_LIBRARIES_DEBUG} optimized ${GLOG_LIBRARIES_RELEASE})
-target_link_libraries(${PROJECT_NAME} debug ${CERES_LIBRARIES_DEBUG} optimized ${CERES_LIBRARIES_RELEASE})
-target_link_libraries(${PROJECT_NAME} debug ${VLFEAT_LIBRARIES_DEBUG} optimized ${VLFEAT_LIBRARIES_RELEASE})
-target_link_libraries(${PROJECT_NAME} debug ${CUDASIFT_LIBRARIES_DEBUG} optimized ${CUDASIFT_LIBRARIES_RELEASE})
-target_link_libraries(${PROJECT_NAME} debug ${FLANN_LIBRARIES_DEBUG} optimized ${FLANN_LIBRARIES_RELEASE})
-target_link_libraries(${PROJECT_NAME} debug ${GDAL_LIBRARIES_DEBUG} optimized ${GDAL_LIBRARIES_RELEASE})
+## SLAM
+SET(SLAM_Files src/slam_gps.h src/slam_gps.cc)
+add_library(SLAMLib STATIC ${Basic_Files} ${SLAM_Files})
+target_link_libraries(SLAMLib ${CMAKE_DL_LIBS} ${OpenCV_LIBS} )
+target_link_libraries(SLAMLib debug ${CERES_LIBRARIES_DEBUG} optimized ${CERES_LIBRARIES_RELEASE})
+
+
+## Dense
+configure_file(${PROJECT_SOURCE_DIR}/src/dense/cudasgm/include/libsgm_config.h.in
+               ${PROJECT_SOURCE_DIR}/src/dense/cudasgm/include/libsgm_config.h )
+SET(Dense_Files src/dense_reconstruction.h src/dense_reconstruction.cc)
+FILE(GLOB CUDASGM_HDRS  "src/dense/cudasgm/*.h")
+FILE(GLOB CUDASGM_SRCS  "src/dense/cudasgm/*.cpp" "src/dense/cudasgm/*.cu")
+source_group(cudasgm FILES ${CUDASGM_HDRS} ${CUDASGM_SRCS})
+cuda_add_library(DenseLib STATIC ${Basic_Files} ${Dense_Files} ${CUDASGM_HDRS} ${CUDASGM_SRCS})
+
 
 add_subdirectory(test)

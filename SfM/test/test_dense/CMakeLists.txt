@@ -1,5 +1,5 @@
 # set project's name
-PROJECT( test_calib )
+PROJECT( test_dense )
 
 ###############################################################################
 # CMake settings
@@ -12,7 +12,7 @@ include_directories(${PROJECT_ROOT_DIR}/src)
 #file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/input.txt DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/input.txt
 
 ADD_EXECUTABLE(${PROJECT_NAME} ${SRCS_FILES})
-TARGET_LINK_LIBRARIES(${PROJECT_NAME} ${OpenCV_LIBS})
+TARGET_LINK_LIBRARIES(${PROJECT_NAME} DenseLib)
 
 set_target_properties(${PROJECT_NAME} PROPERTIES FOLDER ${TEST_ROOT_FOLDER})
 
