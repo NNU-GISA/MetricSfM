@@ -31,6 +31,7 @@ set(THIRDPARTY_ROOT_FOLDER "thirdparty")
 set(TEST_ROOT_FOLDER "test")
 set(PROJECT_ROOT_DIR ${PROJECT_SOURCE_DIR})
 
+
 # CUDA
 find_package(CUDA REQUIRED)
 #list(APPEND CUDA_NVCC_FLAGS "--compiler-options;-O2")
@@ -67,7 +68,8 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib)
 include_directories(
 ${PROJECT_SOURCE_DIR}
 ${PROJECT_SOURCE_DIR}/src
-${PROJECT_SOURCE_DIR}/src/depth/cudasgm/include
+${PROJECT_SOURCE_DIR}/src/dense/cudasgm/include
+${PROJECT_SOURCE_DIR}/src/dense/libelas/include
 ${PROJECT_SOURCE_DIR}/thirdparty
 ${OpenCV_INCLUDE_DIRS}
 ${Boost_INCLUDE_DIRS}
@@ -90,8 +92,7 @@ src/basic_structs.h
 src/camera.h src/camera.cc
 src/database.h src/database.cc
 src/optimizer.h src/optimizer.cc
-src/structure.h src/structure.cc
-)
+src/structure.h src/structure.cc)
 
 #### SfM
 SET(SFM_Files src/sfm_incremental.h src/sfm_incremental.cc)
@@ -133,14 +134,24 @@ target_link_libraries(SLAMLib ${CMAKE_DL_LIBS} ${OpenCV_LIBS} )
 target_link_libraries(SLAMLib debug ${CERES_LIBRARIES_DEBUG} optimized ${CERES_LIBRARIES_RELEASE})
 
 
-## Dense
+## CUDA SGM
 configure_file(${PROJECT_SOURCE_DIR}/src/dense/cudasgm/include/libsgm_config.h.in
                ${PROJECT_SOURCE_DIR}/src/dense/cudasgm/include/libsgm_config.h )
-SET(Dense_Files src/dense_reconstruction.h src/dense_reconstruction.cc)
-FILE(GLOB CUDASGM_HDRS  "src/dense/cudasgm/*.h")
-FILE(GLOB CUDASGM_SRCS  "src/dense/cudasgm/*.cpp" "src/dense/cudasgm/*.cu")
+FILE(GLOB CUDASGM_HDRS  "src/dense/cudasgm/include/*.h")
+FILE(GLOB CUDASGM_SRCS  "src/dense/cudasgm/src/*.cpp" "src/dense/cudasgm/src/*.hpp" "src/dense/cudasgm/src/*.cu")
 source_group(cudasgm FILES ${CUDASGM_HDRS} ${CUDASGM_SRCS})
-cuda_add_library(DenseLib STATIC ${Basic_Files} ${Dense_Files} ${CUDASGM_HDRS} ${CUDASGM_SRCS})
+cuda_add_library(SGMLib STATIC ${CUDASGM_HDRS} ${CUDASGM_SRCS})
+#target_link_libraries(SGMLib ${CMAKE_DL_LIBS} ${OpenCV_LIBS} )
 
+## ELAS
+FILE(GLOB ELAS_HDRS  "src/dense/libelas/include/*.h")
+FILE(GLOB ELAS_SRCS  "src/dense/libelas/src/*.cpp")
+source_group(libelas FILES ${ELAS_HDRS} ${ELAS_SRCS})
+add_library(ELASLib STATIC ${ELAS_HDRS} ${ELAS_SRCS})
+target_link_libraries(ELASLib ${CMAKE_DL_LIBS} ${OpenCV_LIBS} )
+
+SET(Dense_Files src/dense_reconstruction.h src/dense_reconstruction.cc)
+cuda_add_library(DenseLib STATIC ${Basic_Files} ${Dense_Files})
+target_link_libraries(DenseLib ${CMAKE_DL_LIBS} ${OpenCV_LIBS} ${SGMLib} ${ELASLib} )
 
 add_subdirectory(test)

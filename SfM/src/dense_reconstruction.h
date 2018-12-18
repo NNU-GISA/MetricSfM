@@ -17,11 +17,14 @@
 #ifndef OBJECTSFM_SYSTEM_DENSE_H_
 #define OBJECTSFM_SYSTEM_DENSE_H_
 
+#include <opencv2/opencv.hpp>
+
 #include "basic_structs.h"
 #include "database.h"
 #include "camera.h"
 #include "structure.h"
 #include "optimizer.h"
+
 
 namespace objectsfm {
 
@@ -37,8 +40,23 @@ public:
 	// the main pipeline
 	void Run(std::string fold);
 
-private:
+	void ReadinPoseFile(std::string sfm_file);
 
+	void SGMDense();
+
+	void ELASDense();
+
+	void EpipolarRectification(cv::Mat &img1, cv::Mat K1, cv::Mat R1, cv::Mat t1,
+		                       cv::Mat &img2, cv::Mat K2, cv::Mat R2, cv::Mat t2, 
+		                       bool write_out, cv::Mat &R1_, cv::Mat &R2_);
+
+	void SavePoseFile(std::string sfm_file);
+
+private:
+	int cols, rows;
+	std::string fold, fold_img, fold_output;
+	std::vector<std::string> names;
+	std::vector<cv::Mat> Ks, Rs, ts, Rs_new, ts_new;
 };
 
 }  // namespace objectsfm

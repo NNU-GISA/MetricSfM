@@ -260,6 +260,8 @@ namespace objectsfm
 	//
 	struct DenseOptions
 	{
+		int disp_size = 128;
+		float uniqueness = 0.96;
 	};
 
 
