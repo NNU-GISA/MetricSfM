@@ -20,38 +20,37 @@
 
 #include <opencv2/core/core.hpp>  
 #include <opencv2/highgui/highgui.hpp>
-#include <opencv2/nonfree/nonfree.hpp>   
-#include <opencv2/nonfree/features2d.hpp>  
+#include <opencv2/xfeatures2d.hpp>
 
 namespace objectsfm {
 
 
 void FeatureExtractorPanorama::Run(cv::Mat &image, std::string method, ListKeyPoint* keypoints, cv::Mat* descriptors, std::string path)
 {
-	// convert the panorama image into cyclinder image
-	float fov_y = 90.0;
-	float fov_x = 30;
-	int f = 600;
-	cv::Mat img_cyclinder;
-	Sphere2Cyclinder(image, fov_x, fov_y, f, img_cyclinder);
-	cv::imwrite(path, img_cyclinder);
+	//// convert the panorama image into cyclinder image
+	//float fov_y = 90.0;
+	//float fov_x = 30;
+	//int f = 600;
+	//cv::Mat img_cyclinder;
+	//Sphere2Cyclinder(image, fov_x, fov_y, f, img_cyclinder);
+	//cv::imwrite(path, img_cyclinder);
 
-	if (method != "SIFT" && method != "sift" && method != "SURF" && method != "surf")
-	{
-		method = "SIFT";
-	}
+	//if (method != "SIFT" && method != "sift" && method != "SURF" && method != "surf")
+	//{
+	//	method = "SIFT";
+	//}
 
-	cv::initModule_nonfree(); //if use SIFT or SURF
-	cv::Ptr<cv::FeatureDetector> detector = cv::FeatureDetector::create(method);
-	cv::Ptr<cv::DescriptorExtractor> descriptor = cv::DescriptorExtractor::create(method);
+	//cv::initModule_nonfree(); //if use SIFT or SURF
+	//cv::Ptr<cv::FeatureDetector> detector = cv::FeatureDetector::create(method);
+	//cv::Ptr<cv::DescriptorExtractor> descriptor = cv::DescriptorExtractor::create(method);
 
-	std::vector<cv::KeyPoint> keypoints_cur;
-	cv::Mat descriptors_cur;
-	detector->detect(img_cyclinder, keypoints_cur);
-	descriptor->compute(img_cyclinder, keypoints_cur, descriptors_cur);
+	//std::vector<cv::KeyPoint> keypoints_cur;
+	//cv::Mat descriptors_cur;
+	//detector->detect(img_cyclinder, keypoints_cur);
+	//descriptor->compute(img_cyclinder, keypoints_cur, descriptors_cur);
 
-	keypoints->pts = keypoints_cur;
-	*descriptors = descriptors_cur.clone();
+	//keypoints->pts = keypoints_cur;
+	//*descriptors = descriptors_cur.clone();
 }
 
 void FeatureExtractorPanorama::Sphere2Cyclinder(cv::Mat &img_sphere, float fov_x, float fov_y, int f, cv::Mat &img_cyclinder)

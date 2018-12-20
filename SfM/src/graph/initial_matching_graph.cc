@@ -19,7 +19,6 @@
 
 #include <fstream>
 #include <omp.h>
-#include <boost/thread.hpp>
 
 #include "utils/basic_funcs.h"
 #include "utils/ellipsoid_utm_info.h"

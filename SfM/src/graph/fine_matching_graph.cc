@@ -18,7 +18,6 @@
 
 #include <fstream>
 #include <omp.h>
-#include <boost/thread.hpp>
 
 #include "utils/basic_funcs.h"
 #include "utils/geo_verification.h"

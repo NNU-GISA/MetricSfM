@@ -129,46 +129,6 @@ public:
 
 	void ReleaseWordsForImage(int idx);
 
-
-	/* satellite image*/
-	std::string fold_dsm_, zone_id_;
-
-	int dsm_rows_, dsm_cols_, bands_, ellipsoid_id_;
-
-	double ori_x_, ori_y_, gsd_x_, gsd_y_;
-
-	float *img_data_;
-
-	cv::Mat img_cropped_, edge_map_, non_building_mask_;
-
-	int super_pixel_size_;
-
-	float img_pixel_scale_;
-
-	std::vector<cv::Point3f> site_pts_;
-
-	std::vector<std::vector<cv::Point3f>> site_visible_pts_;
-
-	std::vector<std::vector<float>> site_pts_angles_;
-
-	std::vector<std::vector<float>> site_visible_lines_;
-
-	void ReadinDSMInfo();
-
-	void ReadinDSMImage();
-
-	void ReadinDSMImage(float lat, float lon, float radius);
-
-	void ExtractSites();
-
-	void ExtractSiteVisiblePts();
-
-	void ExtractSiteVisibleLines();
-
-	void WriteoutVisibleLines();
-
-	void ReadinVisibleLines();
-
 };
 
 }  // namespace objectsfm

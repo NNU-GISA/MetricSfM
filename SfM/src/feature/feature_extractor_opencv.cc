@@ -18,27 +18,18 @@
 
 #include <opencv2/core/core.hpp>  
 #include <opencv2/highgui/highgui.hpp>
-#include <opencv2/nonfree/nonfree.hpp>   
-#include <opencv2/nonfree/features2d.hpp>  
+#include <opencv2/xfeatures2d.hpp>
 
 namespace objectsfm {
 
 
 void FeatureExtractorOpenCV::Run(cv::Mat &image, std::string method, ListKeyPoint* keypoints, cv::Mat* descriptors)
 {
-	if (method != "SIFT" && method != "sift" && method != "SURF" && method != "surf")
-	{
-		method = "SIFT";
-	}
-
-	cv::initModule_nonfree(); //if use SIFT or SURF
-	cv::Ptr<cv::FeatureDetector> detector = cv::FeatureDetector::create(method);
-	cv::Ptr<cv::DescriptorExtractor> descriptor = cv::DescriptorExtractor::create(method);
-
 	std::vector<cv::KeyPoint> keypoints_cur;
 	cv::Mat descriptors_cur;
-	detector->detect(image, keypoints_cur);
-	descriptor->compute(image, keypoints_cur, descriptors_cur);
+	cv::Ptr<cv::Feature2D> sift = cv::xfeatures2d::SIFT::create();
+	sift->detect(image, keypoints_cur);
+	sift->compute(image, keypoints_cur, descriptors_cur);
 
 	keypoints->pts = keypoints_cur;
 	descriptors = &descriptors_cur;
