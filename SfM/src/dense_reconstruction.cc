@@ -61,10 +61,10 @@ namespace objectsfm {
 		ReadinPoseFile(sfm_file);
 
 		// step2: generate depth image 
-		//fold_output = fold + "\\dense_sgm_result";
-		//SGMDense();
-		fold_output = fold + "\\dense_elas_result";
-		ELASDense();
+		fold_output = fold + "\\dense_sgm_result";
+		SGMDense();
+		//fold_output = fold + "\\dense_elas_result";
+		//ELASDense();
 	}
 
 	void DenseReconstruction::ReadinPoseFile(std::string sfm_file)
@@ -122,10 +122,6 @@ namespace objectsfm {
 		// apply sgm on each image pair
 		for (size_t i = 0; i < names.size() - 1; i++)
 		{
-			if (names[i + 1].compare("4558.jpg") == 0)
-			{
-				int aa = 0;
-			}
 			std::cout << i << std::endl;
 			std::string file_left = fold_img + "\\" + names[i + 1];
 			cv::Mat left = cv::imread(file_left, 0);

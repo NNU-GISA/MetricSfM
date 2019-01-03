@@ -146,7 +146,7 @@ namespace objectsfm
 		// data base
 		int num_image_voc = 500;
 		int resize_image = 2000;
-		std::string feature_type = "VLSIFT"; // SIFT, SURF or VLSIFT
+		std::string feature_type = "CUDASIFT"; // VLSIFT CUDASIFT CUDAASIFT
 
 		// graph
 		std::string matching_graph_algorithm = "FeatureDescriptor"; // BoWSimilarity InvertedFile WordMatching
@@ -231,6 +231,7 @@ namespace objectsfm
 		float resize_image = 1600*1200;
 		std::string feature_type = "VLSIFT"; // SIFT, SURF or VLSIFT
 		bool extract_gist = false;
+		bool resize = false;
 	};
 
 	//

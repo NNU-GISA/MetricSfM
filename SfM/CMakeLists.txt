@@ -45,6 +45,7 @@ if (OPENMP_FOUND)
 endif()
 
 # OpenCV
+#set(OpenCV_DIR "F:/DevelopCenter/ThirdParty/opencv-2.4.13.6/build")  # change the path that your fold containing OpenCVConfig.cmake
 find_package(OpenCV REQUIRED)
 
 # Ceres
@@ -85,10 +86,9 @@ src/camera.h src/camera.cc
 src/database.h src/database.cc
 src/graph.h src/graph.cc
 src/optimizer.h src/optimizer.cc
-src/structure.h src/structure.cc)
+src/structure.h src/structure.cc
+src/accuracy_accessment.h src/accuracy_accessment.cc)
 
-#### SfM
-SET(SFM_Files src/sfm_incremental.h src/sfm_incremental.cc)
 FILE(GLOB Feature_HDRS  "src/feature/*.h" "src/feature/*.hpp")
 FILE(GLOB Feature_SRCS  "src/feature/*.c" "src/feature/*.cc" "src/feature/*.cpp")
 source_group(feature FILES ${Feature_HDRS} ${Feature_SRCS})
@@ -98,10 +98,18 @@ source_group(graph FILES ${Graph_HDRS} ${Graph_SRCS})
 FILE(GLOB Orientation_HDRS  "src/orientation/*.h" "src/orientation/*.hpp")
 FILE(GLOB Orientation_SRCS  "src/orientation/*.c" "src/orientation/*.cc" "src/orientation/*.cpp")
 source_group(orientation FILES ${Orientation_HDRS} ${Orientation_SRCS})
+
+#### SfM
+SET(SFM_Files src/sfm_incremental.h src/sfm_incremental.cc)
+
+## SLAM
+SET(SLAM_Files src/slam_gps.h src/slam_gps.cc)
+
 cuda_add_library(SFMLib 
 STATIC 
 ${Basic_Files}
 ${SFM_Files}
+${SLAM_Files}
 ${Feature_HDRS}      ${Feature_SRCS}
 ${Graph_HDRS}        ${Graph_SRCS}
 ${Orientation_HDRS}  ${Orientation_SRCS}
@@ -112,13 +120,6 @@ ${CMAKE_DL_LIBS} ${OpenCV_LIBS} ${CERES_LIBRARIES} ${FLANN_LIBRARIES} ${GLOG_LIB
 target_link_libraries(SFMLib debug ${VLFEAT_LIBRARIES_DEBUG} optimized ${VLFEAT_LIBRARIES_RELEASE})
 target_link_libraries(SFMLib debug ${CUDASIFT_LIBRARIES_DEBUG} optimized ${CUDASIFT_LIBRARIES_RELEASE})
 target_link_libraries(SFMLib debug ${FBOW_LIBRARIES_DEBUG} optimized ${FBOW_LIBRARIES_RELEASE})
-
-
-## SLAM
-SET(SLAM_Files src/slam_gps.h src/slam_gps.cc)
-add_library(SLAMLib STATIC ${Basic_Files} ${SLAM_Files})
-target_link_libraries(SLAMLib ${CMAKE_DL_LIBS} ${OpenCV_LIBS})
-
 
 ## CUDA SGM
 configure_file(${PROJECT_SOURCE_DIR}/src/dense/cudasgm/include/libsgm_config.h.in

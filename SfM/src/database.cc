@@ -101,6 +101,74 @@ bool Database::FeatureExtraction()
 	return true;
 }
 
+bool Database::FeatureExtraction(std::vector<std::string>& image_paths)
+{
+	image_paths_ = image_paths;
+	if (!image_paths_.size())
+	{
+		return false;
+	}
+
+	// search all the images in the input fold
+	num_imgs_ = image_paths_.size();
+	image_infos_.resize(num_imgs_);
+	keypoints_.resize(num_imgs_);
+	descriptors_.resize(num_imgs_);
+	words_fbow_.resize(num_imgs_);
+	words_vector_.resize(num_imgs_);
+	words_id_.resize(num_imgs_);
+	for (size_t i = 0; i < num_imgs_; i++)
+	{
+		words_fbow_[i] = NULL;
+		words_vector_[i] = NULL;
+	}
+
+	//
+	std::vector<int> idx_missing_feature;
+	if (CheckFeatureIndexExist())
+	{
+		idx_missing_feature = CheckMissingFeatureFile();
+	}
+	else
+	{
+		idx_missing_feature.resize(num_imgs_, 0);
+		for (size_t i = 0; i < num_imgs_; i++)
+		{
+			idx_missing_feature[i] = i;
+		}
+	}
+	if (idx_missing_feature.size())
+	{
+		std::string file_feature = output_fold_ + "//feature_index.txt";
+		std::ofstream ofs(file_feature, std::ios::app);
+
+		for (size_t i = 0; i < idx_missing_feature.size(); i++)
+		{
+			int idx = idx_missing_feature[i];
+			ExtractImageFeatures(idx);
+			WriteoutImageFeature(idx);
+
+			ReleaseImageFeatures(idx);
+			ofs << idx << std::endl;
+		}
+		ofs.close();
+
+		// write gist feature out
+		if (options.extract_gist)
+		{
+			WriteoutGistFeature();
+			for (size_t i = 0; i < num_imgs_; i++) {
+				std::vector<float>().swap(gist_descriptors_[i]);
+			}
+		}
+	}
+
+	// done
+	std::cout << "---finish feature extraction" << std::endl;
+
+	return true;
+}
+
 void Database::SearchImagePaths()
 {
 	for (size_t i = 0; i < image_formats_.size(); i++)
@@ -224,18 +292,20 @@ void Database::ExtractImageFeatures(int idx)
 	int pitch = 128;
 	float ratio = 0.0;
 	cv::Size resize;
-	if (options.resize_image / img_size >= 0.8)
+	if (options.resize)
 	{
-		resize.width = (img.cols / pitch + 1) * pitch;
+		if (options.resize_image / img_size >= 0.8)
+		{
+			resize.width = (img.cols / pitch + 1) * pitch;
+		}
+		else
+		{
+			resize.width = 1664;
+		}
+		ratio = float(resize.width) / img.cols;
+		resize.height = int(ratio*img.rows);
+		cv::resize(img, img, resize);
 	}
-	else
-	{
-		resize.width = 1664;
-	}
-	ratio = float(resize.width) / img.cols;
-	resize.height = int(ratio*img.rows);
-
-	cv::resize(img, img, resize);
 	
 	image_infos_[idx]->cols = img.cols;
 	image_infos_[idx]->rows = img.rows;

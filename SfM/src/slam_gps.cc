@@ -38,19 +38,21 @@
 #include "utils/reprojection_error_pose_cam_xyz.h"
 #include "utils/reprojection_error_pose_xyz.h"
 #include "utils/gps_error_pose.h"
+#include "utils/geo_verification.h"
 
+#include "flann/flann.h"
 
 namespace objectsfm {
 
 	SLAMGPS::SLAMGPS()
 	{
-		rows = 750;
-		cols = 1000;
-		k1 = -0.25653475791443974829;
-		k2 = 0.08229711989891387580;
-		p1 = -0.00071314261865646465;
-		p2 = 0.00006466208069485206;
-		k3 = -0.01320155290268222939;
+		rows = 1500;
+		cols = 2000;
+		k1 = 0.0;
+		k2 = 0.0;
+		p1 = 0.0;
+		p2 = 0.0;
+		k3 = 0.0;
 	}
 
 	SLAMGPS::~SLAMGPS()
@@ -72,15 +74,29 @@ namespace objectsfm {
 		std::string file_rgb = fold + "\\rgb.txt";
 		AssociateCameraGPS(file_rgb, gps_info);
 
+		//std::vector<int> img_ids = { 1,2,3,4,5,6,7,8,9 };
+		//DrawPts(img_ids, fold + "\\undistort_image");
+
 		GrawGPS(fold + "\\gps_pos.bmp");
-		GrawSLAM(fold + "\\slam_pos1.bmp");
+		GrawSLAM(fold + "\\slam_pos.bmp");
+
+		// feature extraction
+		FeatureExtraction(fold);
+
+		// feature matching with pose information
+		if (0) {
+			FeatureMatching(fold);
+		}
+
+		Triangulation(fold);
 
 		// do adjustment
 		FullBundleAdjustment();
 
-		// save
-		SaveUndistortedImage(fold);
+		std::string file_accu = fold + "\\accuracy.txt";
+		GetAccuracy(file_accu, cam_models_, cams_, pts_);
 
+		// save
 		SaveForSure(fold);
 
 		SaveforOpenMVS(fold);
@@ -224,13 +240,380 @@ namespace objectsfm {
 		}
 	}
 
+	void SLAMGPS::FeatureExtraction(std::string fold)
+	{
+		std::string fold_image = fold + "\\rgb";
+		std::string fold_feature = fold + "\\feature";
+		if (!std::experimental::filesystem::exists(fold_feature)) {
+			std::experimental::filesystem::create_directory(fold_feature);
+		}
+
+		// feature extraction
+		std::vector<std::string> image_paths(cams_name_.size());
+		for (size_t i = 0; i < cams_name_.size(); i++)
+		{
+			image_paths[i] = fold_image + "\\" + cams_name_[i] + ".jpg";
+		}
+		db_.output_fold_ = fold_feature;
+		db_.options.resize = false;
+		db_.options.feature_type = options_.feature_type;
+		if (!db_.FeatureExtraction(image_paths)) {
+			std::cout << "Error with the database" << std::endl;
+		}
+	}
+
+	void SLAMGPS::FeatureMatching(std::string fold)
+	{
+		int win_size = 10;
+		int th_same_pts = 20;
+		float th_epipolar = 2.0;
+		float th_distance = 5.0;
+		float th_ratio_f = 0.75;
+		float th_h_f_ratio = 0.90;
+		float th_second_first_ratio = 0.80;
+		std::string fold_feature = fold + "\\feature";
+
+		// step1: matching graph, priori F and H
+		std::map<int, int> cams_info;
+		for (size_t i = 0; i < cams_.size(); i++) {
+			cams_info.insert(std::pair<int, int>(cams_[i]->id_, i));
+		}
+
+		std::vector<std::vector<int>> cam_pts(cams_.size());
+		for (size_t i = 0; i < pts_.size(); i++)
+		{
+			std::map<int, Camera*>::iterator iter_cams = pts_[i]->cams_.begin();
+			while (iter_cams != pts_[i]->cams_.end())
+			{
+				int id_cam = iter_cams->second->id_;
+				std::map<int, int >::iterator iter = cams_info.find(id_cam);
+				cam_pts[iter->second].push_back(i);
+				iter_cams++;
+			}
+		}
+
+		std::vector<std::vector<int>> ids(cams_.size());
+		std::vector<std::vector<cv::Mat>> Fs(cams_.size());
+		std::vector<std::vector<cv::Mat>> Hs(cams_.size());
+		std::string file_prior = fold + "\\feature\\prior.txt";
+		if (!std::experimental::filesystem::exists(file_prior))
+		{
+			for (int i = 0; i < cams_.size(); i++)
+			{
+				std::cout << "image " << i << std::endl;
+				int id_s = MAX_(i - win_size, 0);
+				int id_e = MIN_(i + win_size, cams_.size());
+				for (int j = id_s; j < id_e; j++)
+				{
+					if (j == i) {
+						continue;
+					}
+
+					// query the same pts
+					std::vector<int> same_pts;
+					math::same_in_vectors(cam_pts[i], cam_pts[j], same_pts);
+					if (same_pts.size() < th_same_pts) {
+						continue;
+					}
+					// 
+					std::vector<cv::Point2f> pts1, pts2;
+					for (int m = 0; m < same_pts.size(); m++)
+					{
+						int id_pt = same_pts[m];
+						auto it1 = pts_[id_pt]->pts2d_.begin();
+						auto it2 = pts_[id_pt]->cams_.begin();
+						while (it2 != pts_[id_pt]->cams_.end())
+						{
+							int id_cam = it2->second->id_;
+							std::map<int, int >::iterator iter = cams_info.find(id_cam);
+							if (iter->second == i) {
+								pts1.push_back(cv::Point2f(it1->second(0), it1->second(1)));
+							}
+							if (iter->second == j) {
+								pts2.push_back(cv::Point2f(it1->second(0), it1->second(1)));
+							}
+							it1++;  it2++;
+						}
+					}
+
+					// F matrix
+					std::vector<uchar> status_f(pts1.size());
+					cv::Mat F = cv::findFundamentalMat(pts1, pts2, status_f, cv::FM_RANSAC, th_epipolar);
+					int count_inlier_f = 0;
+					for (int m = 0; m < status_f.size(); m++) {
+						if (status_f[m]) {
+							count_inlier_f++;
+						}
+					}
+					if (count_inlier_f < pts1.size()*th_ratio_f) {
+						continue;
+					}
+
+					// H matrix
+					std::vector<uchar> status_h(pts1.size());
+					cv::Mat H = cv::findHomography(pts1, pts2, status_h, cv::FM_RANSAC, th_distance);
+					int count_inlier_h = 0;
+					for (int m = 0; m < status_h.size(); m++) {
+						if (status_h[m]) {
+							count_inlier_h++;
+						}
+					}
+					if (count_inlier_h > count_inlier_f * th_h_f_ratio) {
+						continue;
+					}
+
+					ids[i].push_back(j);
+					Fs[i].push_back(F);
+					Hs[i].push_back(H);
+				}
+			}
+			WriteOutPriorInfo(file_prior, ids, Fs, Hs);
+		}
+		else
+		{
+			ReadinPriorInfo(file_prior, ids, Fs, Hs);
+		}
+
+		// step2: matching with priori F and H
+		std::vector<std::vector<int>> match_graph;
+		match_graph.resize(cams_.size());
+		for (size_t i = 0; i < cams_.size(); i++) {
+			match_graph[i].resize(cams_.size());
+		}
+
+		for (int i = 0; i < cams_.size(); i++)
+		{
+			int id1 = i;
+			db_.ReadinImageFeatures(id1);
+
+			// generate kd-tree for idx1
+			struct FLANNParameters p;
+			p = DEFAULT_FLANN_PARAMETERS;
+			p.algorithm = FLANN_INDEX_KDTREE;
+			p.trees = 8;
+			p.log_level = FLANN_LOG_INFO;
+			p.checks = 64;
+			float speedup;
+
+			float* data_idx1 = (float*)db_.descriptors_[id1]->data;
+			flann_index_t kdtree_idx1 = flann_build_index(data_idx1, db_.descriptors_[id1]->rows, db_.descriptors_[id1]->cols, &speedup, &p);
+
+			// matching
+			std::vector<std::vector<std::pair<int, int>>> matches(ids[i].size());
+			for (int j = 0; j < ids[i].size(); j++)
+			{
+				int id2 = ids[i][j];
+				db_.ReadinImageFeatures(id2);
+
+				std::cout << "  -------" << id1 << " " << id2 << " " << db_.descriptors_[id1]->rows
+					<< " " << db_.descriptors_[id2]->rows << std::endl;
+
+				// do matching
+				int count = db_.keypoints_[id2]->pts.size();
+				int* knn_id = new int[count * 2];
+				float* knn_dis = new float[count * 2];
+				flann_find_nearest_neighbors_index(kdtree_idx1, (float*)db_.descriptors_[id2]->data, count, knn_id, knn_dis, 2, &p);
+
+				int* ptr_id = knn_id;
+				float* ptr_dis = knn_dis;
+				int count1 = 0, count2 = 0, count3 = 0;
+				std::vector<cv::Point2f> pts1_init, pts2_init;
+				for (int m = 0; m < count; m++)
+				{
+					float ratio = ptr_dis[2 * m + 0] / ptr_dis[2 * m + 1];
+
+					// check1: second first ratio
+					if (ratio > th_second_first_ratio) {
+						count1++;
+						continue;
+					}
+
+					// check2: fundamental
+					cv::Mat pt1 = (cv::Mat_<double>(3, 1) << db_.keypoints_[id1]->pts[ptr_id[2 * m + 0]].pt.x,
+						db_.keypoints_[id1]->pts[ptr_id[2 * m + 0]].pt.y,
+						1);
+					cv::Mat pt2 = (cv::Mat_<double>(3, 1) << db_.keypoints_[id2]->pts[m].pt.x,
+						db_.keypoints_[id2]->pts[m].pt.y,
+						1);
+					cv::Mat l2 = Fs[i][j] * pt1;
+					double epi_dis = abs(l2.dot(pt2)) / sqrt(pow(l2.at<double>(0, 0), 2) + pow(l2.at<double>(1, 0), 2));
+					if (epi_dis > th_epipolar) {
+						count2++;
+						continue;
+					}
+
+					// check3: homography
+					cv::Mat pt22 = Hs[i][j] * pt1;
+					pt22 *= 1.0 / pt22.at<double>(2, 0);
+					double dx = pt2.at<double>(0, 0) - pt22.at<double>(0, 0);
+					double dy = pt2.at<double>(1, 0) - pt22.at<double>(1, 0);
+					double homo_dis = sqrt(dx*dx + dy * dy);
+					if (homo_dis > 20 * th_distance) {
+						count3++;
+						continue;
+					}
+
+					pts1_init.push_back(db_.keypoints_[id1]->pts[ptr_id[2 * m + 0]].pt);
+					pts2_init.push_back(db_.keypoints_[id2]->pts[m].pt);
+					matches[j].push_back(std::pair<int, int>(ptr_id[2 * m + 0], m));
+				}
+				//std::cout << count << " " << count1 << " " << count2 << " " << count3 << " " << matches[j].size() << " ";
+
+				// do geo-verification
+				std::vector<int> inliers;
+				bool isOK = GeoVerification::GeoVerificationFundamental(pts1_init, pts2_init, inliers);
+				std::vector<std::pair<int, int>> match_inliers;
+				for (size_t m = 0; m < inliers.size(); m++) {
+					match_inliers.push_back(matches[j][inliers[m]]);
+				}
+				matches[j] = match_inliers;
+				std::cout << matches[j].size() << std::endl;
+
+				// draw
+				if (0)
+				{
+					cv::Mat image1 = cv::imread(db_.image_paths_[id1]);
+					cv::Mat image2 = cv::imread(db_.image_paths_[id2]);
+					for (size_t m = 0; m < matches[j].size(); m++)
+					{
+						int id_pt1_local = matches[j][m].first;
+						int id_pt2_local = matches[j][m].second;
+						cv::Point2f offset1(image1.cols / 2.0, image1.rows / 2.0);
+						cv::Point2f offset2(image2.cols / 2.0, image2.rows / 2.0);
+						cv::line(image1, db_.keypoints_[id1]->pts[id_pt1_local].pt + offset1,
+							db_.keypoints_[id2]->pts[id_pt2_local].pt + offset2, cv::Scalar(0, 0, 255), 1);
+					}
+					std::string path = "F:\\" + std::to_string(id1 ) + "_" + std::to_string(id2) + "_match.jpg";
+					cv::imwrite(path, image1);
+				}
+
+				//
+				match_graph[id1][id2] = matches[j].size();
+				WriteOutMatches(id1, id2, matches[j]);
+
+				//
+				db_.ReleaseImageFeatures(id2);
+				db_.ReleaseImageKeyPoints(id2);
+				delete[] knn_id;
+				delete[] knn_dis;
+			}
+			flann_free_index(kdtree_idx1, &p);	
+			db_.ReleaseImageFeatures(id1);
+			db_.ReleaseImageKeyPoints(id1);
+		}
+
+		WriteOutMatchGraph(match_graph);
+	}
+
+	void SLAMGPS::Triangulation(std::string fold)
+	{
+		int n_img = cams_.size();
+
+		graph_.AssociateDatabase(&db_);
+		graph_.ReadinMatchingGraph();
+
+		// data association
+		std::map<int, int> pts_points_map;
+		for (size_t i = 0; i < n_img; i++)
+		{
+			std::cout << i << " " << pts_new_.size() << std::endl;
+			std::vector<int> ids;
+			for (size_t j = 0; j < n_img; j++) {
+				if (graph_.match_graph_[i*n_img + j] > 0) {
+					ids.push_back(j);
+				}
+			}
+
+			int id_img1 = i;
+			db_.ReadinImageFeatures(id_img1);
+			for (size_t j = 0; j < ids.size(); j++)
+			{
+				int id_img2 = ids[j];
+				db_.ReadinImageFeatures(id_img2);
+				std::vector<std::pair<int, int>> matches;
+				graph_.QueryMatch(id_img1, id_img2, matches);
+
+				for (size_t m = 0; m < matches.size(); m++)
+				{
+					int id_pt1_local = matches[m].first;
+					int id_pt2_local = matches[m].second;
+
+					int id_pt1_global = id_pt1_local + id_img1 * options_.idx_max_per_image;
+					int id_pt2_global = id_pt2_local + id_img2 * options_.idx_max_per_image;
+					std::map<int, int >::iterator iter1 = pts_points_map.find(id_pt1_global);
+					std::map<int, int >::iterator iter2 = pts_points_map.find(id_pt2_global);
+					if (iter1 != pts_points_map.end()) // add new obs to existing pt
+					{
+						int id_pt = iter1->second;
+						pts_new_[id_pt]->AddObservation(cams_[id_img2],
+							db_.keypoints_[id_img2]->pts[id_pt2_local].pt.x, 
+							db_.keypoints_[id_img2]->pts[id_pt2_local].pt.y,
+							id_img2);
+						pts_points_map.insert(std::pair<int, int>(id_pt2_global, id_pt));
+					}
+					else if (iter2 != pts_points_map.end()) // add new obs to existing pt
+					{
+						int id_pt = iter2->second;
+						pts_new_[id_pt]->AddObservation(cams_[id_img1],
+							db_.keypoints_[id_img1]->pts[id_pt1_local].pt.x,
+							db_.keypoints_[id_img1]->pts[id_pt1_local].pt.y,
+							id_img1);
+						pts_points_map.insert(std::pair<int, int>(id_pt1_global, id_pt));
+					}
+					else  // creat a new pt
+					{
+						Point3D *pt_temp = new Point3D;
+						pt_temp->AddObservation(cams_[id_img1],
+							db_.keypoints_[id_img1]->pts[id_pt1_local].pt.x,
+							db_.keypoints_[id_img1]->pts[id_pt1_local].pt.y,
+							id_img1);
+						pt_temp->AddObservation(cams_[id_img2],
+							db_.keypoints_[id_img2]->pts[id_pt2_local].pt.x,
+							db_.keypoints_[id_img2]->pts[id_pt2_local].pt.y,
+							id_img2);
+
+						pts_new_.push_back(pt_temp);
+						pts_points_map.insert(std::pair<int, int>(id_pt1_global, pts_new_.size() - 1));
+						pts_points_map.insert(std::pair<int, int>(id_pt2_global, pts_new_.size() - 1));
+					}
+				}
+				db_.ReleaseImageFeatures(id_img2);
+				db_.ReleaseImageKeyPoints(id_img2);
+			}
+
+			db_.ReleaseImageFeatures(id_img1);
+			db_.ReleaseImageKeyPoints(id_img1);
+		}
+
+		// triangulation
+		double th_mse_reprojection = 3.0;
+		double th_tri_angle = 5.0 / 180.0*CV_PI;
+		int count_bad = 0;
+		for (size_t i = 0; i < pts_new_.size(); i++)
+		{
+			bool is_ok = pts_new_[i]->Trianglate2(th_mse_reprojection, th_tri_angle);
+			if (!is_ok || pts_new_[i]->cams_.size() < 3) {
+				pts_new_[i]->is_bad_estimated_ = true;
+				count_bad++;
+			}
+		}
+		std::cout << "count_bad " << count_bad << " count_good " << pts_new_.size() - count_bad << std::endl;
+		
+		// accuracy analysis
+		pts_ = pts_new_;
+		std::string file_accu = fold + "\\accuracy.txt";
+		GetAccuracy(file_accu, cam_models_, cams_, pts_);
+
+		WriteCameraPointsOut(fold + "\\slam_cam_pts2.txt");
+	}
+
 	void SLAMGPS::FullBundleAdjustment()
 	{
 		ceres::Problem problem;
 		ceres::Solver::Options options;
 		ceres::Solver::Summary summary;
 
-		options.max_num_iterations = 100;
+		options.max_num_iterations = 50;
 		options.minimizer_progress_to_stdout = true;
 		options.num_threads = 1;
 		options.linear_solver_type = ceres::DENSE_SCHUR;
@@ -247,8 +630,7 @@ namespace objectsfm {
 				ceres::CostFunction* cost_function;
 
 				//cost_function = ReprojectionErrorPoseCamXYZ::Create(iter_pts->second(0), iter_pts->second(1), pts_[i]->weight);
-				//problem.AddResidualBlock(cost_function, loss_function,
-				//	iter_cams->second->data, iter_cams->second->cam_model_->data, pts_[i]->data);
+				//problem.AddResidualBlock(cost_function, loss_function, iter_cams->second->data, iter_cams->second->cam_model_->data, pts_[i]->data);
 
 				cost_function = ReprojectionErrorPoseXYZ::Create(iter_pts->second(0), iter_pts->second(1), iter_cams->second->cam_model_->data, pts_[i]->weight);
 				problem.AddResidualBlock(cost_function, loss_function, iter_cams->second->data, pts_[i]->data);
@@ -265,7 +647,7 @@ namespace objectsfm {
 		if (1)
 		{
 			int step = 5;
-			double weight = 100;
+			double weight = 20;
 			for (int i = 30; i < cams_.size(); i++)
 			{
 				int id1 = i;
@@ -304,6 +686,10 @@ namespace objectsfm {
 		}
 		std::cout << "count1 " << count1 << " count2 " << count2 << std::endl;
 
+		std::cout << cams_[0]->cam_model_->f_ << " ";
+		std::cout << cams_[0]->cam_model_->k1_ << " ";
+		std::cout << cams_[0]->cam_model_->k2_ << std::endl;
+
 		ceres::Solve(options, &problem, &summary);
 		std::cout << summary.FullReport() << "\n";
 
@@ -312,6 +698,14 @@ namespace objectsfm {
 		{
 			cams_[i]->UpdatePoseFromData();
 		}
+		for (size_t i = 0; i < cam_models_.size(); i++)
+		{
+			cam_models_[i]->UpdataModelFromData();
+		}
+
+		std::cout << cams_[0]->cam_model_->f_ << " ";
+		std::cout << cams_[0]->cam_model_->k1_ << " ";
+		std::cout << cams_[0]->cam_model_->k2_ << std::endl;
 	}
 
 	void SLAMGPS::SaveModel()
@@ -592,25 +986,12 @@ namespace objectsfm {
 		std::ofstream ff(file_para);
 		ff << std::fixed << std::setprecision(8);
 
-		// undistortion
-		cv::Mat K(3, 3, CV_64FC1);
-		K.at<double>(0, 0) = 450.495, K.at<double>(0, 1) = 0.0,     K.at<double>(0, 2) = 499.215;
-		K.at<double>(1, 0) = 0.0,     K.at<double>(1, 1) = 450.495, K.at<double>(1, 2) = 380.510;
-		K.at<double>(2, 0) = 0.0,     K.at<double>(2, 1) = 0.0,     K.at<double>(2, 2) = 1.0;
-
-		cv::Mat dist(1, 5, CV_64FC1);
-		dist.at<double>(0, 0) = -0.25653475791443974829;
-		dist.at<double>(0, 1) = 0.08229711989891387580;
-		dist.at<double>(0, 2) = -0.00071314261865646465;
-		dist.at<double>(0, 3) = 0.00006466208069485206;
-		dist.at<double>(0, 4) = -0.01320155290268222939;
-
 		// write out cams
 		ff << cams_.size() << std::endl;
 		for (size_t i = 0; i < cams_.size(); i++)
 		{
 			ff << cams_name_[i] + ".jpg" << std::endl;
-			ff << (fx + fy) / 2.0 << std::endl;
+			ff << cams_[i]->cam_model_->f_ << std::endl;
 			ff << cams_[i]->pos_rt_.R(0, 0) << " " << cams_[i]->pos_rt_.R(0, 1) << " " << cams_[i]->pos_rt_.R(0, 2) << " "
 				<< cams_[i]->pos_rt_.R(1, 0) << " " << cams_[i]->pos_rt_.R(1, 1) << " " << cams_[i]->pos_rt_.R(1, 2) << " "
 				<< cams_[i]->pos_rt_.R(2, 0) << " " << cams_[i]->pos_rt_.R(2, 1) << " " << cams_[i]->pos_rt_.R(2, 2) << std::endl;
@@ -628,6 +1009,12 @@ namespace objectsfm {
 		std::vector<int> num_goods(pts_.size(), 0);
 		for (size_t i = 0; i < pts_.size(); i++)
 		{
+			if (pts_[i]->is_bad_estimated_)
+			{
+				count_good--;
+				continue;
+			}
+
 			auto it1 = pts_[i]->pts2d_.begin();
 			int count_t = pts_[i]->pts2d_.size();
 			while (it1 != pts_[i]->pts2d_.end())
@@ -651,7 +1038,7 @@ namespace objectsfm {
 		ff << count_good << std::endl;
 		for (size_t i = 0; i < pts_.size(); i++)
 		{
-			if (num_goods[i] < 2)
+			if (num_goods[i] < 2 || pts_[i]->is_bad_estimated_)
 			{
 				continue;
 			}
@@ -755,6 +1142,191 @@ namespace objectsfm {
 					ff << iter->second << " " << idx_pt << " " << x << " " << y << std::endl;
 				}
 				it1++;  it2++;
+			}
+		}
+		ff.close();
+	}
+
+	void SLAMGPS::GetAccuracy(std::string file, std::vector<CameraModel*> cam_models, std::vector<Camera*> cams, std::vector<Point3D*> pts)
+	{
+		accuracer_ = new AccuracyAssessment();
+		accuracer_->SetData(cam_models, cams, pts);
+
+		int n_obs;
+		double e_avg, e_mse;
+		std::vector<double> errors;
+		accuracer_->ErrorReprojectionPts(e_avg, e_mse, n_obs, errors);
+		std::cout << "e_avg " << e_avg << " e_mse " << e_mse << " n_obs " << n_obs << std::endl;
+
+		int count_outliers = 0;
+		for (size_t i = 0; i < errors.size(); i++)
+		{
+			if (errors[i] > th_outlier)
+			{
+				pts_[i]->is_bad_estimated_ = true;
+				count_outliers++;
+			}
+		}
+		std::cout << "outliers " << count_outliers << " inliers " << errors.size() - count_outliers << std::endl;
+	}
+
+	void SLAMGPS::DrawPts(std::vector<int> img_ids, std::string fold)
+	{
+		// get all the images
+		std::vector<cv::Mat> imgs(img_ids.size());
+		for (size_t i = 0; i < img_ids.size(); i++)
+		{
+			int id = img_ids[i];
+			std::string img_name = fold + "\\" + cams_name_[id] + ".jpg";
+			imgs[i] = cv::imread(img_name);
+		}
+
+		std::map<int, int> cams_info;
+		for (size_t i = 0; i < cams_.size(); i++) {
+			cams_info.insert(std::pair<int, int>(cams_[i]->id_, i));
+		}
+
+		// 
+		for (size_t i = 0; i < pts_.size(); i++)
+		{
+			auto it1 = pts_[i]->pts2d_.begin();
+			auto it2 = pts_[i]->cams_.begin();
+			while (it1 != pts_[i]->pts2d_.end())
+			{
+				int idx_pt = it2->first;
+				int id_cam = it2->second->id_;
+				std::map<int, int >::iterator iter = cams_info.find(id_cam);
+				bool is_in = false;
+				int idx_in = 0;
+				for (size_t j = 0; j < img_ids.size(); j++) {
+					if (iter->second == img_ids[j]) {
+						is_in = true;
+						idx_in = j;
+						break;
+					}
+				}
+				if (is_in) {
+					int x = it1->second(0) + cx;
+					int y = it1->second(1) + cy;
+					cv::circle(imgs[idx_in], cv::Point(x, y), 2, cv::Scalar(0, 0, 255), 2);
+					cv::putText(imgs[idx_in], std::to_string(i), cv::Point(x, y), 1, 1, cv::Scalar(255, 0, 0));
+				}
+				it1++;  it2++;
+			}
+		}
+
+		for (size_t i = 0; i < imgs.size(); i++)
+		{
+			int id = img_ids[i];
+			std::string file_out = "F:\\" + cams_name_[id] + ".jpg";
+			cv::imwrite(file_out, imgs[i]);
+		}
+	}
+
+	void SLAMGPS::WriteOutMatches(int idx1, int idx2, std::vector<std::pair<int, int>>& matches)
+	{
+		int num_match = matches.size();
+		if (!num_match)
+		{
+			return;
+		}
+
+		int *tempi = new int[num_match * 2];
+		for (size_t m = 0; m < num_match; m++)
+		{
+			tempi[2 * m + 0] = matches[m].first;
+			tempi[2 * m + 1] = matches[m].second;
+		}
+
+		// file i
+		std::ofstream ofsi;
+		std::string match_file_i = db_.output_fold_ + "//" + std::to_string(idx1) + "_match";
+		ofsi.open(match_file_i, std::ios::out | std::ios::app | std::ios::binary);
+		ofsi.write((const char*)(&idx2), sizeof(int));
+		ofsi.write((const char*)(&num_match), sizeof(int));
+		ofsi.write((const char*)(tempi), num_match * 2 * sizeof(int));
+		ofsi.close();
+
+		delete[] tempi;
+	}
+
+	void SLAMGPS::WriteOutMatchGraph(std::vector<std::vector<int>> &match_graph)
+	{
+		std::string path = db_.output_fold_ + "//" + "graph_matching.txt";
+		std::ofstream ofs(path, std::ios::binary);
+
+		if (!ofs.is_open()) {
+			return;
+		}
+
+		for (size_t i = 0; i < match_graph.size(); i++) {
+			for (size_t j = 0; j < match_graph[i].size(); j++) {
+				ofs << match_graph[i][j] << " ";
+			}
+			ofs << std::endl;
+		}
+		ofs.close();
+	}
+
+	void SLAMGPS::WriteOutPriorInfo(std::string file, std::vector<std::vector<int>>& ids, 
+		std::vector<std::vector<cv::Mat>>& Fs, std::vector<std::vector<cv::Mat>>& Hs)
+	{
+		std::ofstream ff(file);
+		ff << std::fixed << std::setprecision(12);
+
+		ff << ids.size() << std::endl;
+		for (size_t i = 0; i < ids.size(); i++)
+		{
+			ff << ids[i].size() << std::endl;
+			for (size_t j = 0; j < ids[i].size(); j++)
+			{
+				ff << ids[i][j] << " ";
+				for (size_t m = 0; m < 3; m++)
+				{
+					for (size_t n = 0; n < 3; n++)
+					{
+						ff << Fs[i][j].at<double>(m, n) << " ";
+						ff << Hs[i][j].at<double>(m, n) << " ";
+					}
+				}
+				ff << std::endl;
+			}
+		}
+		ff.close();
+	}
+
+	void SLAMGPS::ReadinPriorInfo(std::string file, std::vector<std::vector<int>>& ids, 
+		std::vector<std::vector<cv::Mat>>& Fs, std::vector<std::vector<cv::Mat>>& Hs)
+	{
+		std::ifstream ff(file);
+		int num = 0;
+		ff >> num;
+		ids.resize(num);
+		Fs.resize(num);
+		Hs.resize(num);
+
+		for (size_t i = 0; i < num; i++)
+		{
+			int n_cams = 0;
+			ff >> n_cams;
+			ids[i].resize(n_cams);
+			Fs[i].resize(n_cams);
+			Hs[i].resize(n_cams);
+
+			for (size_t j = 0; j < n_cams; j++)
+			{
+				ff >> ids[i][j];
+
+				Fs[i][j] = cv::Mat(3, 3, CV_64FC1);
+				Hs[i][j] = cv::Mat(3, 3, CV_64FC1);
+				for (size_t m = 0; m < 3; m++)
+				{
+					for (size_t n = 0; n < 3; n++)
+					{
+						ff >> Fs[i][j].at<double>(m, n);
+						ff >> Hs[i][j].at<double>(m, n);
+					}
+				}
 			}
 		}
 		ff.close();

@@ -33,14 +33,14 @@ namespace objectsfm
 			return false;
 		}
 
-		cv::Mat HMatrix1 = cv::findHomography(pt1, pt2);
-		if (std::abs(HMatrix1.at<double>(0, 0) - 0.995) < 0.01 &&
-			std::abs(HMatrix1.at<double>(1, 1) - 0.995) < 0.01 &&
-			std::abs(HMatrix1.at<double>(2, 2) - 0.995) < 0.01) {
-			return false;
-		}
+		//cv::Mat HMatrix1 = cv::findHomography(pt1, pt2);
+		//if (std::abs(HMatrix1.at<double>(0, 0) - 0.995) < 0.01 &&
+		//	std::abs(HMatrix1.at<double>(1, 1) - 0.995) < 0.01 &&
+		//	std::abs(HMatrix1.at<double>(2, 2) - 0.995) < 0.01) {
+		//	return false;
+		//}
 
-		float th_epipolar1 = 3.0;
+		float th_epipolar1 = 2.0;
 		std::vector<uchar> ransac_status1(pt1.size());
 		cv::findFundamentalMat(pt1, pt2, ransac_status1, cv::FM_RANSAC, th_epipolar1);
 		for (size_t i = 0; i < ransac_status1.size(); i++) {

@@ -23,6 +23,7 @@
 #include "camera.h"
 #include "structure.h"
 #include "optimizer.h"
+#include "accuracy_accessment.h"
 
 namespace objectsfm {
 
@@ -39,15 +40,26 @@ public:
 	// the main pipeline
 	void Run(std::string fold);
 
-	// initialize
+	// slam information
 	void ReadinSLAM(std::string file_slam);
 
 	void ReadinGPS(std::string file_gps, std::map<int, cv::Point2d> &gps_info);
 
 	void AssociateCameraGPS(std::string file_rgb, std::map<int, cv::Point2d> &gps_info);
 
+	// feature extraction
+	void FeatureExtraction(std::string fold);
+
+	// feature matching
+	void FeatureMatching(std::string fold);
+
+	// triangulation
+	void Triangulation(std::string fold);
+
+	// bundle
 	void FullBundleAdjustment();
 
+	// 
 	void SaveModel();
 
 	void WriteCameraPointsOut(std::string path);
@@ -64,8 +76,27 @@ public:
 
 	void SaveforCMVS(std::string file);
 
+	void GetAccuracy(std::string file, std::vector<CameraModel*> cam_models, std::vector<Camera*> cams, std::vector<Point3D*> pts);
+
+	// 
+	void DrawPts(std::vector<int> img_ids, std::string fold);
+
+	void WriteOutMatches(int idx1, int idx2, std::vector<std::pair<int, int>> &matches);
+
+	void WriteOutMatchGraph(std::vector<std::vector<int>> &match_graph);
+
+	void WriteOutPriorInfo(std::string file, std::vector<std::vector<int>> &ids,
+		std::vector<std::vector<cv::Mat>> &Fs,
+		std::vector<std::vector<cv::Mat>> &Hs);
+
+	void ReadinPriorInfo(std::string file, std::vector<std::vector<int>> &ids,
+		std::vector<std::vector<cv::Mat>> &Fs,
+		std::vector<std::vector<cv::Mat>> &Hs);
+
 private:
 	BundleAdjustOptions bundle_full_options_;
+	Database db_;  // data base
+	Graph graph_;  // graph
 
 	int rows, cols;
 	double fx, fy, cx, cy;
@@ -73,9 +104,13 @@ private:
 
 	std::vector<CameraModel*> cam_models_; // camera models
 	std::vector<Camera*> cams_;  // cameras
-	std::vector<Point3D*> pts_;  // structures
+	std::vector<Point3D*> pts_;  // 3d points from slam
+	std::vector<Point3D*> pts_new_;  // 3d points from matching
+
 	std::vector<cv::Point2d> cams_gps_;  // camera pose from gps
 	std::vector<std::string> cams_name_;  // camera image name
+	AccuracyAssessment* accuracer_;
+	double th_outlier = 3.0;
 };
 
 }  // namespace objectsfm

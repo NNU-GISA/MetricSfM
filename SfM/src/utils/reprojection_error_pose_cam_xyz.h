@@ -67,12 +67,12 @@ namespace objectsfm
 			residuals[0] = weight*(predicted_x - observed_x);
 			residuals[1] = weight*(predicted_y - observed_y);
 			
-			const T th = T(10.0);
-			if (residuals[0] > th || residuals[0] < -th || residuals[1] > th || residuals[1] < -th)
-			{
-				std::cout << predicted_x << " " << observed_x << std::endl;
-				std::cout << predicted_y << " " << observed_y << std::endl;
-			}
+			//const T th = T(10.0);
+			//if (residuals[0] > th || residuals[0] < -th || residuals[1] > th || residuals[1] < -th)
+			//{
+			//	std::cout << predicted_x << " " << observed_x << std::endl;
+			//	std::cout << predicted_y << " " << observed_y << std::endl;
+			//}
 
 			return true;
 		}

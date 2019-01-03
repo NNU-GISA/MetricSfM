@@ -468,6 +468,54 @@ namespace objectsfm
 			}
 			result /= count;
 		}
+
+		void same_in_vectors(std::vector<int>& v1, std::vector<int>& v2, std::vector<int>& vsame)
+		{
+			std::vector<int> v12;
+			v12.resize(v1.size() + v2.size());
+
+			int i = 0, j = 0, k = 0;
+			while (i < v1.size() && j < v2.size())
+			{
+				if (v1[i] < v2[j])
+				{
+					v12[k] = v1[i];
+					i++;
+				}
+				else
+				{
+					v12[k] = v2[j];
+					j++;
+				}
+				k++;
+			}
+			while (i < v1.size())
+			{
+				v12[k] = v1[i];
+				i++;
+				k++;
+			}
+			while (j < v2.size())
+			{
+				v12[k] = v2[j];
+				j++;
+				k++;
+			}
+
+			// unique
+			int v = -1;
+			for (size_t i = 0; i < v12.size(); i++)
+			{
+				if (v12[i] != v)
+				{
+					v = v12[i];
+				}
+				else
+				{
+					vsame.push_back(v);
+				}
+			}
+		}
 	}
 
 	void FindCorrespondences(std::vector<int>& v1, std::vector<int>& v2, std::vector<int>& index)

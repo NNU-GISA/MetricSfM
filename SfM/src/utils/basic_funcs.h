@@ -194,6 +194,8 @@ namespace objectsfm
 		std::vector<int> vector_subtract(int num, std::vector<int> data2);
 
 		void vector_avg_denoise(std::vector<float> &data, int &count, float &result);
+
+		void same_in_vectors(std::vector<int> &v1, std::vector<int> &v2, std::vector<int> &vsame);
 	}
 
 	namespace rotation 

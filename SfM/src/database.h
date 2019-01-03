@@ -39,6 +39,8 @@ public:
 
 	bool FeatureExtraction();
 
+	bool FeatureExtraction(std::vector<std::string> &image_paths);
+
 	/* SFM */
 
 	int num_imgs_;
