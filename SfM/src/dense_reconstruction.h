@@ -52,6 +52,8 @@ public:
 
 	void SavePoseFile(std::string sfm_file);
 
+	void Depth2Points(std::string fold);
+
 private:
 	int cols, rows;
 	std::string fold, fold_img, fold_output;

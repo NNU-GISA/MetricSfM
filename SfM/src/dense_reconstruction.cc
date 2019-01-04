@@ -54,17 +54,17 @@ namespace objectsfm {
 
 	void DenseReconstruction::Run(std::string fold)
 	{
-		fold_img = fold + "\\undistort_image";
+		fold_img = fold + "\\rgb";
 
 		// step1: read in the sfm result
 		std::string sfm_file = fold + "\\sfm_sure.txt";
 		ReadinPoseFile(sfm_file);
 
 		// step2: generate depth image 
-		fold_output = fold + "\\dense_sgm_result";
-		SGMDense();
-		//fold_output = fold + "\\dense_elas_result";
-		//ELASDense();
+		//fold_output = fold + "\\dense_sgm_result";
+		//SGMDense();
+		fold_output = fold + "\\dense_elas_result";
+		ELASDense();
 	}
 
 	void DenseReconstruction::ReadinPoseFile(std::string sfm_file)
@@ -147,10 +147,10 @@ namespace objectsfm {
 				std::exit(EXIT_FAILURE);
 			}
 
-			cv::resize(left, left, cv::Size(left.cols / 2, left.rows / 2));
-			cv::resize(right, right, cv::Size(right.cols / 2, right.rows / 2));
+			//cv::resize(left, left, cv::Size(left.cols / 2, left.rows / 2));
+			//cv::resize(right, right, cv::Size(right.cols / 2, right.rows / 2));
 
-			sgm::StereoSGM::Parameters para(50, 120, options_.uniqueness, false);
+			sgm::StereoSGM::Parameters para(10, 120, options_.uniqueness, false);
 			sgm::StereoSGM ssgm(left.cols, left.rows, options_.disp_size, bits, 8, sgm::EXECUTE_INOUT_HOST2HOST, para);
 
 			cv::Mat disparity(cv::Size(left.cols, left.rows), CV_8UC1);
@@ -194,19 +194,38 @@ namespace objectsfm {
 			std::experimental::filesystem::create_directory(fold_output);
 		}
 
+		std::string fold_txt = fold_output + "\\txt";
+		if (!std::experimental::filesystem::exists(fold_txt)) {
+			std::experimental::filesystem::create_directory(fold_txt);
+		}
+
+		std::string fold_visualize = fold_output + "\\visualize";
+		if (!std::experimental::filesystem::exists(fold_visualize)) {
+			std::experimental::filesystem::create_directory(fold_visualize);
+		}
+
+		std::string fold_depth = fold_output + "\\depth";
+		if (!std::experimental::filesystem::exists(fold_depth)) {
+			std::experimental::filesystem::create_directory(fold_depth);
+		}
+
 		// apply elas on each image pair
+		int count_output = 0;
 		for (size_t i = 0; i < names.size() - 1; i++)
 		{
 			std::cout << i << std::endl;
 			std::string file_left = fold_img + "\\" + names[i + 1];
-			cv::Mat left = cv::imread(file_left, 0);
+			cv::Mat left = cv::imread(file_left);
 
 			std::string file_right = fold_img + "\\" + names[i];
-			cv::Mat right = cv::imread(file_right, 0);
+			cv::Mat right = cv::imread(file_right);
 
 			// generate epipolar image
 			cv::Mat Rleft_, Rright_;
-			EpipolarRectification(left, Ks[i + 1], Rs[i + 1], ts[i + 1], right, Ks[i], Rs[i], ts[i], true, Rleft_, Rright_);
+			EpipolarRectification(left, Ks[i + 1], Rs[i + 1], ts[i + 1], right, Ks[i], Rs[i], ts[i], false, Rleft_, Rright_);
+			cv::Mat left_rgb = left.clone();
+			cv::cvtColor(left, left, CV_RGB2GRAY);
+			cv::cvtColor(right, right, CV_RGB2GRAY);
 
 			// elas
 			const int32_t dims[3] = { left.cols,left.rows,left.cols };
@@ -214,39 +233,65 @@ namespace objectsfm {
 			float* d_right = (float*)malloc(left.cols*left.rows * sizeof(float));
 
 			Elas::parameters param(Elas::ROBOTICS);
-			param.postprocess_only_left = false;
 			param.disp_min = 0;
 			param.disp_max = 400;
 
 			Elas elas(param);
 			elas.process(left.data, right.data, d_left, d_right, dims);
 
-			// find maximum disparity for scaling output disparity images to [0..255]
+			// convert the left desprity into depth
+			// distance = focal_length * baseline distance / disparity
+			cv::Mat c_left  = -Rs[i + 1].inv() * ts[i + 1];
+			cv::Mat c_right = -Rs[i].inv() * ts[i];
+			double base_line = cv::norm(c_left - c_right);
+			double f_left = Ks[i + 1].at<double>(0, 0);
+
 			int size = left.cols * left.rows;
-			float disp_max = 0;
-			float* ptr1 = d_left;
-			float* ptr2 = d_right;
-			for (int32_t j = 0; j<size; j++) {
-				if (*ptr1>disp_max) disp_max = *ptr1;
-				if (*ptr2>disp_max) disp_max = *ptr2;
-				ptr1++; ptr2++;
+			cv::Mat depth_left(left.rows, left.cols, CV_16UC1, cv::Scalar(0));
+			float* ptr_left = d_left;
+			unsigned short* ptr_depth = (unsigned short*)depth_left.data;
+			for (int j = 0; j < size; j++)
+			{
+				double disparity_j = *ptr_left;
+				if (disparity_j > 0) 
+				{
+					double depth_j = 20 * f_left * base_line / disparity_j;
+					*ptr_depth = MIN_(depth_j, 600);
+				}
+				ptr_left++; ptr_depth++;
 			}
+			std::cout << "base_line " << base_line << " f_left " << f_left << std::endl;
 
 			// save out
-			cv::Mat depth_left(left.rows, left.cols, CV_8UC1);
-			ptr1 = d_left;
-			uchar* ptr_d1 = depth_left.data;
-			for (int32_t j = 0; j<size; j++) {
-				*ptr_d1 = (uint8_t)MAX_(*ptr1 * 255.0 / disp_max, 0.0);
+			std::string name = std::to_string(count_output);
+			name = std::string(8 - name.length(), '0') + name;
 
-				ptr_d1++; ptr1++;
+			cv::imwrite(fold_visualize + "\\" + name + ".jpg", left_rgb);
+			cv::imwrite(fold_depth + "\\" + name + ".png", depth_left);
+
+			cv::Mat R_epi = Rs[i + 1] * Rleft_;
+			cv::Mat c_epi = -Rs[i + 1].inv() * ts[i + 1];
+			cv::Mat t_epi = -R_epi * c_epi;
+			cv::Mat M_epi = (cv::Mat_<double>(3, 4) << R_epi.at<double>(0, 0), R_epi.at<double>(0, 1), R_epi.at<double>(0, 2), t_epi.at<double>(0, 0),
+				                                       R_epi.at<double>(1, 0), R_epi.at<double>(1, 1), R_epi.at<double>(1, 2), t_epi.at<double>(1, 0),
+				                                       R_epi.at<double>(2, 0), R_epi.at<double>(2, 1), R_epi.at<double>(2, 2), t_epi.at<double>(2, 0));
+			cv::Mat P_epi = Ks[i + 1] * M_epi;
+			std::ofstream ff(fold_txt + "\\" + name + ".txt");
+			ff << std::fixed << std::setprecision(8);
+			//ff << "CONTOUR" << std::endl;
+			for (size_t m = 0; m < 3; m++) {
+				for (size_t n = 0; n < 3; n++) {
+					ff << R_epi.at<double>(m, n) << " ";
+				}
+				ff << std::endl;
 			}
-
-			std::string file_depth = fold_output + "\\" + names[i + 1];
-			cv::imwrite(file_depth, depth_left);
+			ff << t_epi.at<double>(0, 0) << " " << t_epi.at<double>(1, 0) << " " << t_epi.at<double>(2, 0) << std::endl;
+			ff.close();
 
 			free(d_left);
 			free(d_right);
+
+			count_output++;
 		}
 	}
 
@@ -313,6 +358,97 @@ namespace objectsfm {
 		}
 
 		fclose(fp);
+	}
+
+	void DenseReconstruction::Depth2Points(std::string fold)
+	{
+		double scale = 20.0;
+		double focal = 900.95001200;
+
+		std::string fold_point = fold + "\\pointcloud";
+		if (!std::experimental::filesystem::exists(fold_point)) {
+			std::experimental::filesystem::create_directory(fold_point);
+		}
+
+		// 
+		std::string fold_rgb = fold + "\\visualize";
+		std::string fold_depth = fold + "\\depth";
+		std::string fold_txt = fold + "\\txt";
+
+		std::vector<cv::String> img_paths;
+		cv::glob(fold_rgb + "/*.jpg", img_paths, false);
+		for (size_t i = 0; i < img_paths.size(); i++)
+		{
+			std::string path_i = std::string(img_paths[i].c_str());
+			int idxs = path_i.find_last_of("\\");
+			int idxe = path_i.find_last_of(".");
+			std::string name_i = path_i.substr(idxs + 1, idxe - idxs - 1);
+
+			std::string path_rgb = fold_rgb + "\\" + name_i + ".jpg";
+			std::string path_depth = fold_depth + "\\" + name_i + ".png";
+			std::string path_txt = fold_txt + "\\" + name_i + ".txt";
+
+			cv::Mat depth = cv::imread(path_depth, -1);
+			//cv::Mat rgb = cv::imread(path_rgb);
+
+			std::ifstream ff(path_txt);
+			cv::Mat R = cv::Mat(3, 3, CV_64FC1);
+			cv::Mat t = cv::Mat(3, 1, CV_64FC1);
+			for (size_t m = 0; m < 3; m++)
+			{
+				for (size_t n = 0; n < 3; n++)
+				{
+					double v = 0;
+					ff >> v;
+					*((double*)R.data + m * 3 + n) = v;
+				}
+			}
+			for (size_t m = 0; m < 3; m++)
+			{
+				double v = 0;
+				ff >> v;
+				*((double*)t.data + m) = v;
+			}
+			ff.close();
+
+			//
+			double px = depth.cols / 2;
+			double py = depth.rows / 2;
+			short* ptr_depth = (short*)depth.data;
+			//uchar* ptr_rgb = rgb.data;
+			std::vector<cv::Point3d> pts;
+			std::vector<cv::Point3d> colors;
+			for (size_t m = 0; m < depth.rows; m++)
+			{
+				for (size_t n = 0; n < depth.cols; n++)
+				{
+					if (*ptr_depth != 0)
+					{
+						double z = *ptr_depth / scale;
+						double x = z * (n - px) / focal;
+						double y = z * (m - py) / focal;
+						cv::Mat Xc = (cv::Mat_<double>(3, 1) << x, y, z);
+						cv::Mat Xw = R.inv()*(Xc - t);
+
+						pts.push_back(cv::Point3d(Xw.at<double>(0, 0), Xw.at<double>(1, 0), Xw.at<double>(2, 0)));
+						//colors.push_back(cv::Point3d(ptr_rgb[0], ptr_rgb[1], ptr_rgb[2]));
+						colors.push_back(cv::Point3d(0, 0, 0));
+					}
+					ptr_depth++;
+					//ptr_rgb++;
+				}
+			}
+
+			// write out
+			std::string path_point = fold_point + "\\" + name_i + ".txt";
+			std::ofstream of(path_point);
+			for (size_t m = 0; m < pts.size(); m += 2)
+			{
+				of << pts[m].x << " " << pts[m].y << " " << pts[m].z << " ";
+				of << colors[m].x << " " << colors[m].y << " " << colors[m].z << std::endl;
+			}
+			of.close();
+		}
 	}
 
 }  // namespace objectsfm

@@ -87,12 +87,12 @@ namespace objectsfm {
 		if (0) {
 			FeatureMatching(fold);
 		}
-
+		std::cout << 1 << std::endl;
 		Triangulation(fold);
 
 		// do adjustment
-		FullBundleAdjustment();
-
+		//FullBundleAdjustment();
+		std::cout << 2 << std::endl;
 		std::string file_accu = fold + "\\accuracy.txt";
 		GetAccuracy(file_accu, cam_models_, cams_, pts_);
 
@@ -1068,27 +1068,27 @@ namespace objectsfm {
 
 	void SLAMGPS::SaveforCMVS(std::string fold)
 	{
-		std::string file_para = fold + "\\sfm_cmvs.txt";
+		std::string fold_cmvs = fold + "\\cmvs";
+		if (!std::experimental::filesystem::exists(fold_cmvs)) {
+			std::experimental::filesystem::create_directory(fold_cmvs);
+		}
+		std::string fold_img = fold_cmvs + "\\visualize";
+		if (!std::experimental::filesystem::exists(fold_img)) {
+			std::experimental::filesystem::create_directory(fold_img);
+		}
+		std::string fold_txt = fold_cmvs + "\\txt";
+		if (!std::experimental::filesystem::exists(fold_txt)) {
+			std::experimental::filesystem::create_directory(fold_txt);
+		}
+		std::string fold_rgb = fold + "\\rgb";
 
+		// step1: save bundle
+		std::string file_para = fold_cmvs + "\\bundle.rd.out";
 		int count_good = pts_.size();
 		std::vector<int> num_goods(pts_.size(), 0);
 		for (size_t i = 0; i < pts_.size(); i++)
 		{
-			auto it1 = pts_[i]->pts2d_.begin();
-			int count_t = pts_[i]->pts2d_.size();
-			while (it1 != pts_[i]->pts2d_.end())
-			{
-				int x = it1->second(0) + cx;
-				int y = it1->second(1) + cy;
-				if (x<0 || x >= cols || y<0 || y >= rows)
-				{
-					count_t--;
-				}
-				it1++;
-			}
-
-			num_goods[i] = count_t;
-			if (count_t < 2)
+			if (pts_[i]->is_bad_estimated_)
 			{
 				count_good--;
 			}
@@ -1118,14 +1118,14 @@ namespace objectsfm {
 
 		for (size_t i = 0; i < pts_.size(); i++)
 		{
-			if (num_goods[i] < 2)
+			if (pts_[i]->is_bad_estimated_)
 			{
 				continue;
 			}
 
 			ff << pts_[i]->data[0] << " " << pts_[i]->data[1] << " " << pts_[i]->data[2] << " ";
 			ff << 255 << " " << 255 << " " << 255 << " ";
-			ff << num_goods[i] << std::endl;
+			ff << pts_[i]->pts2d_.size() << std::endl;
 
 			auto it1 = pts_[i]->pts2d_.begin();
 			auto it2 = pts_[i]->cams_.begin();
@@ -1135,16 +1135,48 @@ namespace objectsfm {
 				int id_cam = it2->second->id_;
 				std::map<int, int >::iterator iter = cams_info.find(id_cam);
 
-				int x = it1->second(0) + cx;
-				int y = it1->second(1) + cy;
-				if (!(x < 0 || x >= cols || y < 0 || y >= rows))
-				{
-					ff << iter->second << " " << idx_pt << " " << x << " " << y << std::endl;
-				}
+				int x = it1->second(0);
+				int y = it1->second(1);
+				ff << iter->second << " " << idx_pt << " " << float(x) << " " << float(y) << std::endl;
 				it1++;  it2++;
 			}
 		}
 		ff.close();
+
+		// step2: save txt and image
+		for (size_t i = 0; i < cams_.size(); i++)
+		{
+			std::string name = std::to_string(i);
+			name = std::string(8 - name.length(), '0') + name;
+
+			// txt
+			Eigen::Matrix3d R = cams_[i]->pos_rt_.R;
+			Eigen::Vector3d t = cams_[i]->pos_rt_.t;
+			cv::Mat M = (cv::Mat_<double>(3, 4) << R(0, 0), R(0, 1), R(0, 2), t(0),
+				                                   R(1, 0), R(1, 1), R(1, 2), t(1),
+				                                   R(2, 0), R(2, 1), R(2, 2), t(2));
+			cv::Mat K = (cv::Mat_<double>(3, 3) << fx, 0, cx,
+				0, fy, cy,
+				0, 0, 1);
+			cv::Mat P = K * M;
+
+			std::ofstream ff(fold_txt + "\\" + name + ".txt");
+			ff << std::fixed << std::setprecision(8);
+			ff << "CONTOUR" << std::endl;
+			for (size_t m = 0; m < 3; m++) {
+				for (size_t n = 0; n < 4; n++) {
+					ff << P.at<double>(m, n) << " ";
+				}
+				ff << std::endl;
+			}
+			ff.close();
+
+			// image
+			std::string file_img_in = fold_rgb + "\\" + cams_name_[i] + ".jpg";
+			std::string file_img_out = fold_img + "\\" + name + ".jpg";
+			cv::Mat img = cv::imread(file_img_in);
+			cv::imwrite(file_img_out, img);
+		}
 	}
 
 	void SLAMGPS::GetAccuracy(std::string file, std::vector<CameraModel*> cam_models, std::vector<Camera*> cams, std::vector<Point3D*> pts)

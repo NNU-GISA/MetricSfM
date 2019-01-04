@@ -74,7 +74,7 @@ public:
 
 	void SaveforOpenMVS(std::string file);
 
-	void SaveforCMVS(std::string file);
+	void SaveforCMVS(std::string fold);
 
 	void GetAccuracy(std::string file, std::vector<CameraModel*> cam_models, std::vector<Camera*> cams, std::vector<Point3D*> pts);
 
