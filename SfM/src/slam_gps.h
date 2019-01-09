@@ -76,6 +76,8 @@ public:
 
 	void SaveforCMVS(std::string fold);
 
+	void SaveforMSP(std::string fold);
+
 	void GetAccuracy(std::string file, std::vector<CameraModel*> cam_models, std::vector<Camera*> cams, std::vector<Point3D*> pts);
 
 	// 
@@ -99,8 +101,7 @@ private:
 	Graph graph_;  // graph
 
 	int rows, cols;
-	double fx, fy, cx, cy;
-	double k1, k2, k3, p1, p2;
+	double fx, fy, cx, cy;  // initial intrinsic parameters from slam
 
 	std::vector<CameraModel*> cam_models_; // camera models
 	std::vector<Camera*> cams_;  // cameras
@@ -110,7 +111,8 @@ private:
 	std::vector<cv::Point2d> cams_gps_;  // camera pose from gps
 	std::vector<std::string> cams_name_;  // camera image name
 	AccuracyAssessment* accuracer_;
-	double th_outlier = 3.0;
+	double th_outlier, resize_ratio;
+	std::string fold_image_;
 };
 
 }  // namespace objectsfm

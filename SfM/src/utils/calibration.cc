@@ -32,6 +32,8 @@ namespace objectsfm
 		double k1 = cam_model->k1_;
 		double k2 = cam_model->k2_;
 		double f = cam_model->f_;
+		double dcx = cam_model->dcx_;
+		double dcy = cam_model->dcy_;
 		if (k1 == 0 || k2 == 0 || f == 0) {
 			pts_undistorted = pts;
 			return;
@@ -48,8 +50,8 @@ namespace objectsfm
 		pts_undistorted.resize(pts.size());
 		for (size_t i = 0; i < pts.size(); i++)
 		{
-			double u = pts[i][0];
-			double v = pts[i][1];
+			double u = pts[i][0] - dcx;
+			double v = pts[i][1] - dcy;
 
 			// undistortion
 			/* u = f * d * x      v = f * d * y      d = 1 + k1 * r2 + k2 * r4
@@ -77,6 +79,9 @@ namespace objectsfm
 		double k1 = cam_model->k1_;
 		double k2 = cam_model->k2_;
 		double f = cam_model->f_;
+		double dcx = cam_model->dcx_;
+		double dcy = cam_model->dcy_;
+
 		if (k1 == 0 || k2 == 0 || f == 0) {
 			pt_undistorted = pt;
 			return;
@@ -90,8 +95,8 @@ namespace objectsfm
 		polynomial[4] = 1.0;
 
 		//
-		double u = pt[0];
-		double v = pt[1];
+		double u = pt[0] - dcx;
+		double v = pt[1] - dcy;
 		polynomial[5] = -(u*u + v * v) / (f*f);
 		Eigen::VectorXd real(5), imaginary(5);
 		FindPolynomialRootsCompanionMatrix(polynomial, &real, &imaginary);

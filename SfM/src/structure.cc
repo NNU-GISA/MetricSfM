@@ -388,4 +388,20 @@ void Point3D::ReleaseAll()
 	}
 }
 
+void Point3D::UpdateFromData()
+{
+	std::map<int, Camera*>::iterator iter_cams = cams_.begin();
+	std::map<int, Eigen::Vector2d>::iterator iter_pts = pts2d_.begin();
+	while (iter_cams != cams_.end())
+	{
+		// undistortion
+		Eigen::Vector2d pt_undistorted;
+		Calibration::UndistortedPts(iter_pts->second, pt_undistorted, iter_cams->second->cam_model_);
+		iter_pts->second = pt_undistorted;
+
+		iter_cams++;
+		iter_pts++;
+	}
+}
+
 }  // namespace objectsfm

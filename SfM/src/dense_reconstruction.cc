@@ -54,7 +54,7 @@ namespace objectsfm {
 
 	void DenseReconstruction::Run(std::string fold)
 	{
-		fold_img = fold + "\\rgb";
+		fold_img = fold + "\\undistort_image";
 
 		// step1: read in the sfm result
 		std::string sfm_file = fold + "\\sfm_sure.txt";
@@ -132,6 +132,8 @@ namespace objectsfm {
 			// generate epipolar image
 			cv::Mat Rleft_, Rright_;
 			EpipolarRectification(left, Ks[i + 1], Rs[i + 1], ts[i + 1], right, Ks[i], Rs[i], ts[i], true, Rleft_, Rright_);
+			std::string file_left1 = "F:\\" + std::to_string(i) + "_" + std::to_string(i + 1) + ".jpg";
+			std::string file_right1 = "F:\\" + std::to_string(i) + "_" + std::to_string(i) + ".jpg";
 
 			// get disparity via sgm
 			ASSERT_MSG(left.size() == right.size() && left.type() == right.type(), "input images must be same size and type.");
@@ -146,7 +148,6 @@ namespace objectsfm {
 				std::cerr << "invalid input image color format" << left.type() << std::endl;
 				std::exit(EXIT_FAILURE);
 			}
-
 			//cv::resize(left, left, cv::Size(left.cols / 2, left.rows / 2));
 			//cv::resize(right, right, cv::Size(right.cols / 2, right.rows / 2));
 

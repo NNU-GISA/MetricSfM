@@ -24,6 +24,6 @@ void main(void)
 	objectsfm::DenseReconstruction denser;
 
 	std::string fold = "F:\\Database\\GoPro\\11-20\\1114_HERO7_data\\front\\GX020005";
-	//denser.Run(fold);
-	denser.Depth2Points(fold + "\\dense_elas_result");
+	denser.Run(fold);
+	//denser.Depth2Points(fold + "\\dense_elas_result");
 }

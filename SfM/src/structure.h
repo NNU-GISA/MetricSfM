@@ -59,6 +59,9 @@ public:
 
 	void ReleaseAll();
 
+	void UpdateFromData();
+
+
 	int id_;
 	bool is_mutable_, is_bad_estimated_, is_new_added_;
 

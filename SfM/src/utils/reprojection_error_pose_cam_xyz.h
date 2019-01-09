@@ -54,26 +54,22 @@ namespace objectsfm
 
 			// Apply second and fourth order radial distortion.
 			const T& focal = cam[0];
-			const T& l1 = cam[1];
-			const T& l2 = cam[2];
+			const T& k1 = cam[1];
+			const T& k2 = cam[2];
+			const T& d_cx = cam[3];
+			const T& d_cy = cam[4];
+
 			const T r2 = xp*xp + yp*yp;
-			const T distortion = 1.0 + r2  * (l1 + l2  * r2);
+			const T distortion = 1.0 + r2 * (k1 + k2 * r2);
 
 			// Compute final projected point position.
-			const T predicted_x = focal * distortion * xp;
-			const T predicted_y = focal * distortion * yp;
+			const T predicted_x = focal * distortion * xp + d_cx;
+			const T predicted_y = focal * distortion * yp + d_cy;
 
 			// The error is the difference between the predicted and observed position.
 			residuals[0] = weight*(predicted_x - observed_x);
 			residuals[1] = weight*(predicted_y - observed_y);
 			
-			//const T th = T(10.0);
-			//if (residuals[0] > th || residuals[0] < -th || residuals[1] > th || residuals[1] < -th)
-			//{
-			//	std::cout << predicted_x << " " << observed_x << std::endl;
-			//	std::cout << predicted_y << " " << observed_y << std::endl;
-			//}
-
 			return true;
 		}
 
@@ -81,7 +77,7 @@ namespace objectsfm
 		// the client code.
 		static ceres::CostFunction* Create(const double observed_x, const double observed_y, const double weight)
 		{
-			return (new ceres::AutoDiffCostFunction<ReprojectionErrorPoseCamXYZ, 2, 6, 3, 3>(
+			return (new ceres::AutoDiffCostFunction<ReprojectionErrorPoseCamXYZ, 2, 6, 5, 3>(
 				new ReprojectionErrorPoseCamXYZ(observed_x, observed_y, weight)));
 		}
 

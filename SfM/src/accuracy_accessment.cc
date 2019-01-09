@@ -51,8 +51,8 @@ namespace objectsfm {
 				double y = pt_c(1) / pt_c(2);
 				double r2 = x * x + y * y;
 				double distortion = 1.0 + r2 * (iter_cams->second->cam_model_->k1_ + iter_cams->second->cam_model_->k2_  * r2);
-				double u = iter_cams->second->cam_model_->f_ * distortion * x; // the coordinate in pixel on the image
-				double v = iter_cams->second->cam_model_->f_ * distortion * y;
+				double u = iter_cams->second->cam_model_->f_ * distortion * x + iter_cams->second->cam_model_->dcx_; // the coordinate in pixel on the image
+				double v = iter_cams->second->cam_model_->f_ * distortion * y + iter_cams->second->cam_model_->dcy_;
 				double e = std::pow(u - iter_pts->second(0), 2) + std::pow(v - iter_pts->second(1), 2);
 				errors.push_back(e);
 			}

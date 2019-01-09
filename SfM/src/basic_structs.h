@@ -56,7 +56,7 @@ namespace objectsfm
 			f_hyp_ = MAX_(w, h)*1.2;
 			w_ = w, h_ = h;
 			px_ = w_/2.0, py_ = h_/2.0;
-			k1_ = 0.0, k2_ = 0.0;
+			k1_ = 0.0, k2_ = 0.0, dcx_ = 0.0, dcy_ = 0.0;
 			id_ = id;
 			cam_maker_ = cam_maker;
 			cam_model_ = cam_model;
@@ -85,6 +85,8 @@ namespace objectsfm
 			data[0] = f_;
 			data[1] = k1_;
 			data[2] = k2_;
+			data[3] = dcx_;
+			data[4] = dcy_;
 		}
 
 		void UpdataModelFromData()
@@ -92,6 +94,11 @@ namespace objectsfm
 			f_  = data[0];
 			k1_ = data[1];
 			k2_ = data[2];
+			dcx_ = data[3];
+			dcy_ = data[4];
+
+			px_ += dcx_;
+			py_ += dcy_;
 		}
 
 		void AddCamera(int idx)
@@ -109,8 +116,8 @@ namespace objectsfm
 		std::string cam_maker_, cam_model_;
 		int w_, h_;       // cols and rows
 		double f_mm_, f_, f_hyp_, px_, py_;  // focal length and principle point
-		double k1_, k2_;   // distrotion paremeters
-		double data[3];    // for bundle adjustment, [0,1,2] are f_, k1_ and k2_, respectively
+		double k1_, k2_, dcx_, dcy_;   // distrotion paremeters
+		double data[5];    // for bundle adjustment, {f_, k1_, k2_, dcx_, dcy_}, respectively
 		int num_cams_;
 		std::vector<int> idx_cams_;
 		bool is_mutable_;

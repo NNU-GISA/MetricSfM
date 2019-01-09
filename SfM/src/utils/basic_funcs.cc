@@ -241,6 +241,17 @@ namespace objectsfm
 
 			R = Rz * Ry*Rx;
 		}
+
+		void RotationMatrixToEulerAngles(Eigen::Matrix3d R, double & rx, double & ry, double & rz)
+		{
+			rx = std::atan2(-R(1, 2), R(2, 2));
+			ry = std::asin(R(0, 2));
+			rz = std::atan2(-R(0, 1), R(0, 0));
+
+			if (rx != rx) { rx = 0.0; }
+			if (ry != ry) { ry = 0.0; }
+			if (rz != rz) { rz = 0.0; }
+		}
 	}
 
 	namespace math

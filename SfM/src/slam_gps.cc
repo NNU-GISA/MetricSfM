@@ -46,13 +46,10 @@ namespace objectsfm {
 
 	SLAMGPS::SLAMGPS()
 	{
-		rows = 1500;
-		cols = 2000;
-		k1 = 0.0;
-		k2 = 0.0;
-		p1 = 0.0;
-		p2 = 0.0;
-		k3 = 0.0;
+		rows = 3000;
+		cols = 4000;
+		th_outlier = 3.0;
+		resize_ratio = 0.5;	
 	}
 
 	SLAMGPS::~SLAMGPS()
@@ -81,31 +78,36 @@ namespace objectsfm {
 		GrawSLAM(fold + "\\slam_pos.bmp");
 
 		// feature extraction
+		fold_image_ = fold + "\\original";
 		FeatureExtraction(fold);
 
 		// feature matching with pose information
 		if (0) {
 			FeatureMatching(fold);
 		}
-		std::cout << 1 << std::endl;
 		Triangulation(fold);
 
 		// do adjustment
-		//FullBundleAdjustment();
+		FullBundleAdjustment();
 		std::cout << 2 << std::endl;
 		std::string file_accu = fold + "\\accuracy.txt";
 		GetAccuracy(file_accu, cam_models_, cams_, pts_);
 
+		// write out
+		WriteCameraPointsOut(fold + "\\slam_cam_pts.txt");
+		GrawSLAM(fold + "\\slam_pos2.bmp");
+		exit(0);
+
 		// save
+		SaveUndistortedImage(fold);
+
 		SaveForSure(fold);
 
 		SaveforOpenMVS(fold);
 
 		SaveforCMVS(fold);
 
-		// write out
-		WriteCameraPointsOut(fold + "\\slam_cam_pts.txt");
-		GrawSLAM(fold + "\\slam_pos2.bmp");
+		SaveforMSP(fold);
 	}
 
 	void SLAMGPS::ReadinSLAM(std::string file_slam)
@@ -173,6 +175,11 @@ namespace objectsfm {
 		}
 
 		// camera models
+		fx /= resize_ratio;
+		fy /= resize_ratio;
+		cx /= resize_ratio;
+		cy /= resize_ratio;
+
 		cam_models_.resize(1);
 		cam_models_[0] = new CameraModel(cam_models_.size(), rows, cols, (fx+fy)/2.0, 0.0, "lu", "lu");
 		cam_models_[0]->SetIntrisicParas((fx + fy) / 2.0, cx, cy);
@@ -242,7 +249,7 @@ namespace objectsfm {
 
 	void SLAMGPS::FeatureExtraction(std::string fold)
 	{
-		std::string fold_image = fold + "\\rgb";
+		std::string fold_image = fold_image_;
 		std::string fold_feature = fold + "\\feature";
 		if (!std::experimental::filesystem::exists(fold_feature)) {
 			std::experimental::filesystem::create_directory(fold_feature);
@@ -266,11 +273,11 @@ namespace objectsfm {
 	{
 		int win_size = 10;
 		int th_same_pts = 20;
-		float th_epipolar = 2.0;
-		float th_distance = 5.0;
+		float th_epipolar = 2.0 / resize_ratio;
+		float th_distance = 5.0 / resize_ratio;
 		float th_ratio_f = 0.75;
 		float th_h_f_ratio = 0.90;
-		float th_second_first_ratio = 0.80;
+		float th_first_second_ratio = 0.80;
 		std::string fold_feature = fold + "\\feature";
 
 		// step1: matching graph, priori F and H
@@ -327,10 +334,10 @@ namespace objectsfm {
 							int id_cam = it2->second->id_;
 							std::map<int, int >::iterator iter = cams_info.find(id_cam);
 							if (iter->second == i) {
-								pts1.push_back(cv::Point2f(it1->second(0), it1->second(1)));
+								pts1.push_back(cv::Point2f(it1->second(0), it1->second(1)) * (1.0 / resize_ratio));
 							}
 							if (iter->second == j) {
-								pts2.push_back(cv::Point2f(it1->second(0), it1->second(1)));
+								pts2.push_back(cv::Point2f(it1->second(0), it1->second(1)) * (1.0 / resize_ratio));
 							}
 							it1++;  it2++;
 						}
@@ -423,7 +430,7 @@ namespace objectsfm {
 					float ratio = ptr_dis[2 * m + 0] / ptr_dis[2 * m + 1];
 
 					// check1: second first ratio
-					if (ratio > th_second_first_ratio) {
+					if (ratio > th_first_second_ratio) {
 						count1++;
 						continue;
 					}
@@ -448,7 +455,7 @@ namespace objectsfm {
 					double dx = pt2.at<double>(0, 0) - pt22.at<double>(0, 0);
 					double dy = pt2.at<double>(1, 0) - pt22.at<double>(1, 0);
 					double homo_dis = sqrt(dx*dx + dy * dy);
-					if (homo_dis > 20 * th_distance) {
+					if (homo_dis > 40 * th_distance) {
 						count3++;
 						continue;
 					}
@@ -586,13 +593,13 @@ namespace objectsfm {
 		}
 
 		// triangulation
-		double th_mse_reprojection = 3.0;
-		double th_tri_angle = 5.0 / 180.0*CV_PI;
+		double th_tri_angle = 3.0 / 180.0*CV_PI;
 		int count_bad = 0;
 		for (size_t i = 0; i < pts_new_.size(); i++)
 		{
-			bool is_ok = pts_new_[i]->Trianglate2(th_mse_reprojection, th_tri_angle);
+			bool is_ok = pts_new_[i]->Trianglate2(th_outlier, th_tri_angle);
 			if (!is_ok || pts_new_[i]->cams_.size() < 3) {
+			//if (!is_ok) {
 				pts_new_[i]->is_bad_estimated_ = true;
 				count_bad++;
 			}
@@ -615,13 +622,17 @@ namespace objectsfm {
 
 		options.max_num_iterations = 50;
 		options.minimizer_progress_to_stdout = true;
-		options.num_threads = 1;
+		options.num_threads = 4;
 		options.linear_solver_type = ceres::DENSE_SCHUR;
 
 		// add reprojection error
 		int count1 = 0;
 		for (size_t i = 0; i < pts_.size(); i++)
 		{
+			if (pts_[i]->is_bad_estimated_) {
+				continue;
+			}
+
 			std::map<int, Camera*>::iterator iter_cams = pts_[i]->cams_.begin();
 			std::map<int, Eigen::Vector2d>::iterator iter_pts = pts_[i]->pts2d_.begin();
 			while (iter_cams != pts_[i]->cams_.end())
@@ -629,11 +640,11 @@ namespace objectsfm {
 				ceres::LossFunction* loss_function = new ceres::HuberLoss(1.0);
 				ceres::CostFunction* cost_function;
 
-				//cost_function = ReprojectionErrorPoseCamXYZ::Create(iter_pts->second(0), iter_pts->second(1), pts_[i]->weight);
-				//problem.AddResidualBlock(cost_function, loss_function, iter_cams->second->data, iter_cams->second->cam_model_->data, pts_[i]->data);
+				cost_function = ReprojectionErrorPoseCamXYZ::Create(iter_pts->second(0), iter_pts->second(1), pts_[i]->weight);
+				problem.AddResidualBlock(cost_function, loss_function, iter_cams->second->data, iter_cams->second->cam_model_->data, pts_[i]->data);
 
-				cost_function = ReprojectionErrorPoseXYZ::Create(iter_pts->second(0), iter_pts->second(1), iter_cams->second->cam_model_->data, pts_[i]->weight);
-				problem.AddResidualBlock(cost_function, loss_function, iter_cams->second->data, pts_[i]->data);
+				//cost_function = ReprojectionErrorPoseXYZ::Create(iter_pts->second(0), iter_pts->second(1), iter_cams->second->cam_model_->data, pts_[i]->weight);
+				//problem.AddResidualBlock(cost_function, loss_function, iter_cams->second->data, pts_[i]->data);
 
 				iter_cams++;
 				iter_pts++;
@@ -648,7 +659,7 @@ namespace objectsfm {
 		{
 			int step = 5;
 			double weight = 20;
-			for (int i = 30; i < cams_.size(); i++)
+			for (int i = 6; i < cams_.size(); i++)
 			{
 				int id1 = i;
 				int k = (i - 6) / 3;
@@ -688,7 +699,9 @@ namespace objectsfm {
 
 		std::cout << cams_[0]->cam_model_->f_ << " ";
 		std::cout << cams_[0]->cam_model_->k1_ << " ";
-		std::cout << cams_[0]->cam_model_->k2_ << std::endl;
+		std::cout << cams_[0]->cam_model_->k2_ << " ";
+		std::cout << cams_[0]->cam_model_->dcx_ << " ";
+		std::cout << cams_[0]->cam_model_->dcy_ << std::endl;
 
 		ceres::Solve(options, &problem, &summary);
 		std::cout << summary.FullReport() << "\n";
@@ -702,10 +715,16 @@ namespace objectsfm {
 		{
 			cam_models_[i]->UpdataModelFromData();
 		}
+		//for (size_t i = 0; i < pts_.size(); i++)
+		//{
+		//	pts_[i]->UpdateFromData();
+		//}
 
 		std::cout << cams_[0]->cam_model_->f_ << " ";
 		std::cout << cams_[0]->cam_model_->k1_ << " ";
-		std::cout << cams_[0]->cam_model_->k2_ << std::endl;
+		std::cout << cams_[0]->cam_model_->k2_ << " ";
+		std::cout << cams_[0]->cam_model_->dcx_ << " ";
+		std::cout << cams_[0]->cam_model_->dcy_ << std::endl;
 	}
 
 	void SLAMGPS::SaveModel()
@@ -791,8 +810,10 @@ namespace objectsfm {
 		float span = 100;
 		for (size_t i = 0; i < pts_.size(); i++)
 		{
-			if (abs(pts_[i]->data[0]) > span || abs(pts_[i]->data[1]) > span || abs(pts_[i]->data[2]) > span)
-			{
+			if (pts_[i]->is_bad_estimated_) {
+				continue;
+			}
+			if (abs(pts_[i]->data[0]) > span || abs(pts_[i]->data[1]) > span || abs(pts_[i]->data[2]) > span) {
 				continue;
 			}
 
@@ -903,19 +924,19 @@ namespace objectsfm {
 	{
 		// undistortion
 		cv::Mat K(3, 3, CV_64FC1);
-		K.at<double>(0, 0) = 450.495, K.at<double>(0, 1) = 0.0, K.at<double>(0, 2) = 499.215;
-		K.at<double>(1, 0) = 0.0, K.at<double>(1, 1) = 450.495, K.at<double>(1, 2) = 380.510;
+		K.at<double>(0, 0) = cams_[0]->cam_model_->f_,  K.at<double>(0, 1) = 0.0, K.at<double>(0, 2) = cams_[0]->cam_model_->px_;
+		K.at<double>(1, 0) = 0.0, K.at<double>(1, 1) = cams_[0]->cam_model_->f_,  K.at<double>(1, 2) = cams_[0]->cam_model_->py_;
 		K.at<double>(2, 0) = 0.0, K.at<double>(2, 1) = 0.0, K.at<double>(2, 2) = 1.0;
 
 		cv::Mat dist(1, 5, CV_64FC1);
-		dist.at<double>(0, 0) = -0.25653475791443974829;
-		dist.at<double>(0, 1) = 0.08229711989891387580;
-		dist.at<double>(0, 2) = -0.00071314261865646465;
-		dist.at<double>(0, 3) = 0.00006466208069485206;
-		dist.at<double>(0, 4) = -0.01320155290268222939;
+		dist.at<double>(0, 0) = cams_[0]->cam_model_->k1_;
+		dist.at<double>(0, 1) = cams_[0]->cam_model_->k2_;
+		dist.at<double>(0, 2) = 0.0;
+		dist.at<double>(0, 3) = 0.0;
+		dist.at<double>(0, 4) = 0.0;
 
 		//
-		std::string fold_rgb = fold + "\\rgb";
+		std::string fold_rgb = fold_image_;
 		std::string fold_image = fold + "\\undistort_image";
 		if (!std::experimental::filesystem::exists(fold_image)) {
 			std::experimental::filesystem::create_directory(fold_image);
@@ -968,8 +989,8 @@ namespace objectsfm {
 			fprintf(fp, "%.8lf %.8lf %.8lf\n", fx, 0, cx);
 			fprintf(fp, "%.8lf %.8lf %.8lf\n", 0, fy, cy);
 			fprintf(fp, "%d %d %d\n", 0, 0, 1);
-			fprintf(fp, "%.8lf %.8lf %.8lf\n", k1, k2, k3);
-			fprintf(fp, "%.8lf %.8lf\n", p1, p2);
+			fprintf(fp, "%.8lf %.8lf %.8lf\n", 0, 0, 0);
+			fprintf(fp, "%.8lf %.8lf\n", 0, 0);
 			fprintf(fp, "%.8lf %.8lf %.8lf\n", cams_[i]->pos_rt_.t(0), cams_[i]->pos_rt_.t(1), cams_[i]->pos_rt_.t(2));
 			fprintf(fp, "%.8lf %.8lf %.8lf\n", cams_[i]->pos_rt_.R(0, 0), cams_[i]->pos_rt_.R(0, 1), cams_[i]->pos_rt_.R(0, 2));
 			fprintf(fp, "%.8lf %.8lf %.8lf\n", cams_[i]->pos_rt_.R(1, 0), cams_[i]->pos_rt_.R(1, 1), cams_[i]->pos_rt_.R(1, 2));
@@ -1080,7 +1101,7 @@ namespace objectsfm {
 		if (!std::experimental::filesystem::exists(fold_txt)) {
 			std::experimental::filesystem::create_directory(fold_txt);
 		}
-		std::string fold_rgb = fold + "\\rgb";
+		std::string fold_rgb = fold + "\\undistort_image";
 
 		// step1: save bundle
 		std::string file_para = fold_cmvs + "\\bundle.rd.out";
@@ -1103,7 +1124,7 @@ namespace objectsfm {
 		ff << cams_.size() << " " << count_good << std::endl;
 		for (size_t i = 0; i < cams_.size(); i++)
 		{
-			ff << (fx + fy) / 2.0 << " " << 0.0 << " " << 0.0 << std::endl;
+			ff << cams_[0]->cam_model_->f_ << " " << cams_[0]->cam_model_->k1_ << " " << cams_[0]->cam_model_->k2_ << std::endl;
 			ff << cams_[i]->pos_rt_.R(0, 0) << " " << cams_[i]->pos_rt_.R(0, 1) << " " << cams_[i]->pos_rt_.R(0, 2) << " "
 				<< cams_[i]->pos_rt_.R(1, 0) << " " << cams_[i]->pos_rt_.R(1, 1) << " " << cams_[i]->pos_rt_.R(1, 2) << " "
 				<< cams_[i]->pos_rt_.R(2, 0) << " " << cams_[i]->pos_rt_.R(2, 1) << " " << cams_[i]->pos_rt_.R(2, 2) << std::endl;
@@ -1155,8 +1176,8 @@ namespace objectsfm {
 			cv::Mat M = (cv::Mat_<double>(3, 4) << R(0, 0), R(0, 1), R(0, 2), t(0),
 				                                   R(1, 0), R(1, 1), R(1, 2), t(1),
 				                                   R(2, 0), R(2, 1), R(2, 2), t(2));
-			cv::Mat K = (cv::Mat_<double>(3, 3) << fx, 0, cx,
-				0, fy, cy,
+			cv::Mat K = (cv::Mat_<double>(3, 3) << cams_[0]->cam_model_->f_, 0, cams_[0]->cam_model_->px_,
+				0, cams_[0]->cam_model_->f_, cams_[0]->cam_model_->py_,
 				0, 0, 1);
 			cv::Mat P = K * M;
 
@@ -1177,6 +1198,40 @@ namespace objectsfm {
 			cv::Mat img = cv::imread(file_img_in);
 			cv::imwrite(file_img_out, img);
 		}
+	}
+
+	void SLAMGPS::SaveforMSP(std::string fold)
+	{
+		std::string file_msp = fold + "\\msp.qin";
+		std::ofstream ff(file_msp);
+		ff << std::fixed << std::setprecision(12);
+
+		ff << cams_.size() << std::endl;
+		double pixel_mm = 0.005;
+		ff << cams_[0]->cam_model_->f_ * pixel_mm << " " 
+		   << cams_[0]->cam_model_->dcx_ * pixel_mm << " " 
+		   << cams_[0]->cam_model_->dcy_ * pixel_mm << " " 
+		   << pixel_mm << " " << pixel_mm << " " << cols << " " << rows << std::endl;
+
+		Eigen::Matrix3d R_cv2ph;
+		R_cv2ph << 1.0, 0.0, 0.0,
+			0.0, cos(CV_PI), -sin(CV_PI),
+			0.0, sin(CV_PI), cos(CV_PI);
+
+		for (size_t i = 0; i < cams_.size(); i++)
+		{
+			ff << cams_name_[i] + ".jpg" << " " << cams_[i]->pos_ac_.c(0) << " " << cams_[i]->pos_ac_.c(1) << " " << cams_[i]->pos_ac_.c(2) << " ";
+
+			// convert cv coordinate system to photogrammetry system by rotating around x-axis for pi
+			Eigen::Matrix3d Rph = R_cv2ph * cams_[i]->pos_rt_.R;
+			double rx = 0.0, ry = 0.0, rz = 0.0;
+			rotation::RotationMatrixToEulerAngles(Rph, rx, ry, rz);
+			ff << rx << " " << ry << " " << rz;
+			if (i < cams_.size() - 1) {
+				ff << std::endl;
+			}
+		}
+		ff.close();
 	}
 
 	void SLAMGPS::GetAccuracy(std::string file, std::vector<CameraModel*> cam_models, std::vector<Camera*> cams, std::vector<Point3D*> pts)

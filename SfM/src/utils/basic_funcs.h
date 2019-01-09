@@ -214,6 +214,8 @@ namespace objectsfm
 
 		// R = Rz*Ry*Rx
 		void EulerAnglesToRotationMatrix(double rx, double ry, double rz, Eigen::Matrix3d &R); 
+
+		void RotationMatrixToEulerAngles(Eigen::Matrix3d R, double &rx, double &ry, double &rz);
 	}
 
 	namespace memory
