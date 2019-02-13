@@ -43,9 +43,9 @@ public:
 	// slam information
 	void ReadinSLAM(std::string file_slam);
 
-	void ReadinGPS(std::string file_gps, std::map<int, cv::Point2d> &gps_info);
+	void ReadinGPS(std::string file_gps, std::map<int, cv::Point3d> &gps_info);
 
-	void AssociateCameraGPS(std::string file_rgb, std::map<int, cv::Point2d> &gps_info);
+	void AssociateCameraGPS(std::string file_rgb, std::map<int, cv::Point3d> &gps_info);
 
 	// feature extraction
 	void FeatureExtraction(std::string fold);
@@ -68,6 +68,8 @@ public:
 
 	void GrawSLAM(std::string path);
 
+	void GrawSLAMGPS(std::string path);
+
 	void SaveUndistortedImage(std::string fold);
 
 	void SaveForSure(std::string fold);
@@ -79,6 +81,8 @@ public:
 	void SaveforMSP(std::string fold);
 
 	void GetAccuracy(std::string file, std::vector<CameraModel*> cam_models, std::vector<Camera*> cams, std::vector<Point3D*> pts);
+
+	void AbsoluteOrientationWithGPS();
 
 	// 
 	void DrawPts(std::vector<int> img_ids, std::string fold);
@@ -95,6 +99,8 @@ public:
 		std::vector<std::vector<cv::Mat>> &Fs,
 		std::vector<std::vector<cv::Mat>> &Hs);
 
+	void WriteGPSPose(std::string file);
+
 private:
 	BundleAdjustOptions bundle_full_options_;
 	Database db_;  // data base
@@ -108,11 +114,12 @@ private:
 	std::vector<Point3D*> pts_;  // 3d points from slam
 	std::vector<Point3D*> pts_new_;  // 3d points from matching
 
-	std::vector<cv::Point2d> cams_gps_;  // camera pose from gps
+	std::vector<cv::Point3d> cams_gps_;  // camera pose from gps
 	std::vector<std::string> cams_name_;  // camera image name
 	AccuracyAssessment* accuracer_;
 	double th_outlier, resize_ratio;
 	std::string fold_image_;
+	Eigen::Vector3d gps_offset_;
 };
 
 }  // namespace objectsfm

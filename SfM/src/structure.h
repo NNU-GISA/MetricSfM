@@ -61,7 +61,9 @@ public:
 
 	void UpdateFromData();
 
+	void Transformation(Eigen::Matrix3d R, Eigen::Vector3d t, double scale);
 
+	//
 	int id_;
 	bool is_mutable_, is_bad_estimated_, is_new_added_;
 

@@ -48,6 +48,8 @@ public:
 
 	void SetACPose(Eigen::Vector3d a, Eigen::Vector3d c);
 
+	void Transformation(Eigen::Matrix3d R, Eigen::Vector3d t, double scale);
+
 	void UpdateDataFromPose();
 
 	void UpdatePoseFromData();

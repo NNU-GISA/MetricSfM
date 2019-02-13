@@ -37,8 +37,11 @@
 #include "utils/ellipsoid_utm_info.h"
 #include "utils/reprojection_error_pose_cam_xyz.h"
 #include "utils/reprojection_error_pose_xyz.h"
-#include "utils/gps_error_pose.h"
+#include "utils/gps_error_pose_raletive_angle.h"
+#include "utils/gps_error_pose_raletive_dis.h"
+#include "utils/gps_error_pose_absolute.h"
 #include "utils/geo_verification.h"
+#include "utils/transformation.h"
 
 #include "flann/flann.h"
 
@@ -59,12 +62,14 @@ namespace objectsfm {
 	void SLAMGPS::Run(std::string fold)
 	{
 		// read in slam information
-		std::string file_slam = fold + "\\slam.txt";
+		std::string file_slam = fold + "\\KeyFramePts.txt";
 		ReadinSLAM(file_slam);
 
+		WriteCameraPointsOut(fold + "\\cam_pts1.txt");
+
 		// read in gps
-		std::string file_gps = fold + "\\gps.txt";
-		std::map<int, cv::Point2d> gps_info;
+		std::string file_gps = fold + "\\pos.txt";
+		std::map<int, cv::Point3d> gps_info;
 		ReadinGPS(file_gps, gps_info);
 
 		// accosiation
@@ -75,17 +80,28 @@ namespace objectsfm {
 		//DrawPts(img_ids, fold + "\\undistort_image");
 
 		GrawGPS(fold + "\\gps_pos.bmp");
-		GrawSLAM(fold + "\\slam_pos.bmp");
+		GrawSLAM(fold + "\\slam_pos1.bmp");
+		GrawSLAMGPS(fold + "\\slam_gps.bmp");
 
 		// feature extraction
 		fold_image_ = fold + "\\original";
 		FeatureExtraction(fold);
+
+		// convert to the gps world coordinates
+		std::cout << "begin converting" << std::endl;
+		AbsoluteOrientationWithGPS();
+		std::cout << "finish converting" << std::endl;
+		WriteGPSPose(fold + "\\gps_pos.txt");
+
+		WriteCameraPointsOut(fold + "\\cam_pts1.txt");
 
 		// feature matching with pose information
 		if (0) {
 			FeatureMatching(fold);
 		}
 		Triangulation(fold);
+
+		WriteCameraPointsOut(fold + "\\cam_pts2.txt");
 
 		// do adjustment
 		FullBundleAdjustment();
@@ -94,14 +110,12 @@ namespace objectsfm {
 		GetAccuracy(file_accu, cam_models_, cams_, pts_);
 
 		// write out
-		WriteCameraPointsOut(fold + "\\slam_cam_pts.txt");
+		WriteCameraPointsOut(fold + "\\cam_pts3.txt");
 		GrawSLAM(fold + "\\slam_pos2.bmp");
-		exit(0);
 
 		// save
+		std::cout << "saving output..." << std::endl;
 		SaveUndistortedImage(fold);
-
-		SaveForSure(fold);
 
 		SaveforOpenMVS(fold);
 
@@ -189,7 +203,7 @@ namespace objectsfm {
 		}
 	}
 
-	void SLAMGPS::ReadinGPS(std::string file_gps, std::map<int, cv::Point2d> &gps_info )
+	void SLAMGPS::ReadinGPS(std::string file_gps, std::map<int, cv::Point3d> &gps_info )
 	{
 		int ellipsoid_id = 23; // WGS-84
 		std::string zone_id = "17N";
@@ -202,12 +216,12 @@ namespace objectsfm {
 		{
 			ff >> id >> lat >> lon >> alt;
 			LLtoUTM(ellipsoid_id, lat, lon, y, x, (char*)zone_id.c_str());
-			gps_info.insert(std::pair<int, cv::Point2d>(id, cv::Point2d(x, y)));
+			gps_info.insert(std::pair<int, cv::Point3d>(id, cv::Point3d(x, y, alt)));
 		}
 		ff.close();
 	}
 
-	void SLAMGPS::AssociateCameraGPS(std::string file_rgb, std::map<int, cv::Point2d>& gps_info)
+	void SLAMGPS::AssociateCameraGPS(std::string file_rgb, std::map<int, cv::Point3d>& gps_info)
 	{
 		std::ifstream ff(file_rgb);
 		std::string s0;
@@ -216,18 +230,21 @@ namespace objectsfm {
 		std::getline(ff, s0);
 
 
-		std::vector<cv::Point2d> gps_all_frame;
+		std::vector<cv::Point3d> gps_all_frame;
 		std::vector<std::string> names_all_frame;
 		while (!ff.eof())
 		{
 			std::string s;
 			std::getline(ff, s);
+			if (s == "") {
+				break;
+			}
 			size_t loc1 = s.find_last_of('/');
 			size_t loc2 = s.find_last_of('.');
 			std::string name = s.substr(loc1 + 1, loc2 - loc1 - 1);
 			int id = std::stoi(name);
 
-			std::map<int, cv::Point2d>::iterator iter = gps_info.find(id);
+			std::map<int, cv::Point3d>::iterator iter = gps_info.find(id);
 			if (iter == gps_info.end())
 			{
 				continue;
@@ -271,11 +288,11 @@ namespace objectsfm {
 
 	void SLAMGPS::FeatureMatching(std::string fold)
 	{
-		int win_size = 10;
+		int win_size = 5;
 		int th_same_pts = 20;
 		float th_epipolar = 2.0 / resize_ratio;
 		float th_distance = 5.0 / resize_ratio;
-		float th_ratio_f = 0.75;
+		float th_ratio_f = 0.5;
 		float th_h_f_ratio = 0.90;
 		float th_first_second_ratio = 0.80;
 		std::string fold_feature = fold + "\\feature";
@@ -303,6 +320,7 @@ namespace objectsfm {
 		std::vector<std::vector<cv::Mat>> Fs(cams_.size());
 		std::vector<std::vector<cv::Mat>> Hs(cams_.size());
 		std::string file_prior = fold + "\\feature\\prior.txt";
+		std::cout << "win_size " << win_size << std::endl;
 		if (!std::experimental::filesystem::exists(file_prior))
 		{
 			for (int i = 0; i < cams_.size(); i++)
@@ -352,7 +370,7 @@ namespace objectsfm {
 							count_inlier_f++;
 						}
 					}
-					if (count_inlier_f < pts1.size()*th_ratio_f) {
+					if (count_inlier_f < pts1.size()*th_ratio_f || count_inlier_f < 30) {
 						continue;
 					}
 
@@ -598,7 +616,7 @@ namespace objectsfm {
 		for (size_t i = 0; i < pts_new_.size(); i++)
 		{
 			bool is_ok = pts_new_[i]->Trianglate2(th_outlier, th_tri_angle);
-			if (!is_ok || pts_new_[i]->cams_.size() < 3) {
+			if (!is_ok || pts_new_[i]->cams_.size() < 2) {
 			//if (!is_ok) {
 				pts_new_[i]->is_bad_estimated_ = true;
 				count_bad++;
@@ -611,7 +629,7 @@ namespace objectsfm {
 		std::string file_accu = fold + "\\accuracy.txt";
 		GetAccuracy(file_accu, cam_models_, cams_, pts_);
 
-		WriteCameraPointsOut(fold + "\\slam_cam_pts2.txt");
+		//WriteCameraPointsOut(fold + "\\slam_cam_pts2.txt");
 	}
 
 	void SLAMGPS::FullBundleAdjustment()
@@ -620,7 +638,7 @@ namespace objectsfm {
 		ceres::Solver::Options options;
 		ceres::Solver::Summary summary;
 
-		options.max_num_iterations = 50;
+		options.max_num_iterations = 100;
 		options.minimizer_progress_to_stdout = true;
 		options.num_threads = 4;
 		options.linear_solver_type = ceres::DENSE_SCHUR;
@@ -654,48 +672,124 @@ namespace objectsfm {
 		}
 
 		// add gps-topology error
-		int count2 = 0;
+		int count2 = 0, count3 = 0;
 		if (1)
 		{
-			int step = 5;
-			double weight = 20;
-			for (int i = 6; i < cams_.size(); i++)
+			bool use_relative_gps_angle = true;
+			bool use_relative_gps_dis = false;
+			bool use_absolute_gps = false;
+			if (use_relative_gps_angle)
 			{
-				int id1 = i;
-				int k = (i - 6) / 3;
-				for (int j = 0; j < k; j++)
+				double ddx = cams_[0]->pos_ac_.c[0] - cams_[2]->pos_ac_.c[0];
+				double ddy = cams_[0]->pos_ac_.c[1] - cams_[2]->pos_ac_.c[1];
+				double ddz = cams_[0]->pos_ac_.c[2] - cams_[2]->pos_ac_.c[2];
+				double len_baseline = std::sqrt(ddx * ddx + ddy * ddy + ddz * ddz);
+				len_baseline /= 2.0;
+				float th_triangle_len = 50.0 * len_baseline;
+
+				int step = 2;
+				double weight = 100;
+				for (int i = 6; i < cams_.size(); i++)
 				{
-					int id2 = j;
-					int id3 = k + j;
-
-					cv::Point2d v12 = cams_gps_[id2] - cams_gps_[id1];
-					double l12 = sqrt(v12.x*v12.x + v12.y*v12.y);
-
-					cv::Point2d v13 = cams_gps_[id3] - cams_gps_[id1];
-					double l13 = sqrt(v13.x*v13.x + v13.y*v13.y);
-
-					cv::Point2d v23 = cams_gps_[id3] - cams_gps_[id2];
-					double l23 = sqrt(v23.x*v23.x + v23.y*v23.y);
-
-					if (l12 == 0 || l13 == 0 || l23 == 0)
+					int id1 = i;
+					int k = (i - 6) / 2;
+					for (int j = 0; j < k; j++)
 					{
-						continue;
+						int id2 = j;
+						int id3 = k + j;
+
+						cv::Point3d v12 = cams_gps_[id2] - cams_gps_[id1];
+						double l12 = sqrt(v12.x*v12.x + v12.y*v12.y);
+
+						cv::Point3d v13 = cams_gps_[id3] - cams_gps_[id1];
+						double l13 = sqrt(v13.x*v13.x + v13.y*v13.y);
+
+						cv::Point3d v23 = cams_gps_[id3] - cams_gps_[id2];
+						double l23 = sqrt(v23.x*v23.x + v23.y*v23.y);
+
+						if (l12 < th_triangle_len || l13 < th_triangle_len || l23 < th_triangle_len)
+						{
+							continue;
+						}
+
+						double angle1 = acos((v12.x*v13.x + v12.y*v13.y) / l12 / l13);
+						double angle2 = acos((-v12.x*v23.x - v12.y*v23.y) / l12 / l23);
+						double angle3 = acos((v13.x*v23.x + v13.y*v23.y) / l13 / l23);
+
+						ceres::LossFunction* loss_function = new ceres::HuberLoss(1.0);
+						ceres::CostFunction* cost_function;
+						cost_function = GPSErrorPoseRelativeAngle::Create(angle1, angle2, angle3, weight);
+						problem.AddResidualBlock(cost_function, loss_function, cams_[id1]->data, cams_[id2]->data, cams_[id3]->data);
+
+						count2++;
 					}
-
-					double angle1 = acos((v12.x*v13.x + v12.y*v13.y) / l12 / l13);
-					double angle2 = acos((-v12.x*v23.x - v12.y*v23.y) / l12 / l23);
-					double angle3 = acos((v13.x*v23.x + v13.y*v23.y) / l13 / l23);
-
-					ceres::LossFunction* loss_function = new ceres::HuberLoss(1.0);
-					ceres::CostFunction* cost_function;
-					cost_function = GPSErrorPose::Create(angle1, angle2, angle3, weight);
-					problem.AddResidualBlock(cost_function, loss_function, cams_[id1]->data, cams_[id2]->data, cams_[id3]->data);
-
-					count2++;
 				}
 			}
+			if (use_relative_gps_dis)
+			{
+				double ddx = cams_[0]->pos_ac_.c[0] - cams_[2]->pos_ac_.c[0];
+				double ddy = cams_[0]->pos_ac_.c[1] - cams_[2]->pos_ac_.c[1];
+				double ddz = cams_[0]->pos_ac_.c[2] - cams_[2]->pos_ac_.c[2];
+				double len_baseline = std::sqrt(ddx * ddx + ddy * ddy + ddz * ddz);
+				len_baseline /= 2.0;
+				float th_triangle_len = 50.0 * len_baseline;
+
+				int step = 2;
+				double weight = 10;
+				for (int i = 6; i < cams_.size(); i++)
+				{
+					int id1 = i;
+					int k = (i - 6) / 2;
+					for (int j = 0; j < k; j++)
+					{
+						int id2 = j;
+						int id3 = k + j;
+
+						cv::Point3d v1 = cams_gps_[id2] - cams_gps_[id1];
+						double l1 = sqrt(v1.x*v1.x + v1.y*v1.y);
+
+						cv::Point3d v2 = cams_gps_[id3] - cams_gps_[id2];
+						double l2 = sqrt(v2.x*v2.x + v2.y*v2.y);
+
+						cv::Point3d v3 = cams_gps_[id1] - cams_gps_[id3];
+						double l3 = sqrt(v3.x*v3.x + v3.y*v3.y);
+
+						if (l1 < th_triangle_len || l2 < th_triangle_len || l3 < th_triangle_len)
+						{
+							continue;
+						}
+
+						double ratio12 = l1 / l2;
+						double ratio23 = l2 / l3;
+
+						ceres::LossFunction* loss_function = new ceres::HuberLoss(1.0);
+						ceres::CostFunction* cost_function;
+						cost_function = GPSErrorPoseRelativeDis::Create(ratio12, ratio23, weight);
+						problem.AddResidualBlock(cost_function, loss_function, cams_[id1]->data, cams_[id2]->data, cams_[id3]->data);
+
+						count2++;
+					}
+				}
+			}
+			if (use_absolute_gps)
+			{
+				for (int i = 0; i < cams_.size(); i++)
+				{
+					ceres::LossFunction* loss_function = new ceres::HuberLoss(1.0);
+					ceres::CostFunction* cost_function;
+					double weight = pts_.size() / cams_.size() * 10;
+					cost_function = GPSErrorPoseAbsolute::Create(cams_gps_[i].x - gps_offset_(0),
+						cams_gps_[i].y - gps_offset_(1), 
+						cams_gps_[i].z - gps_offset_(2), 
+						weight);
+					problem.AddResidualBlock(cost_function, loss_function, cams_[i]->data);
+
+					count3++;
+				}
+			}
+			
 		}
-		std::cout << "count1 " << count1 << " count2 " << count2 << std::endl;
+		std::cout << "count1 " << count1 << " count2 " << count2 << " count3 " << count3 << std::endl;
 
 		std::cout << cams_[0]->cam_model_->f_ << " ";
 		std::cout << cams_[0]->cam_model_->k1_ << " ";
@@ -807,15 +901,15 @@ namespace objectsfm {
 		}
 		ofs << std::fixed << std::setprecision(8);
 
-		float span = 100;
+		//float span = 1000;
 		for (size_t i = 0; i < pts_.size(); i++)
 		{
 			if (pts_[i]->is_bad_estimated_) {
 				continue;
 			}
-			if (abs(pts_[i]->data[0]) > span || abs(pts_[i]->data[1]) > span || abs(pts_[i]->data[2]) > span) {
-				continue;
-			}
+			//if (abs(pts_[i]->data[0]) > span || abs(pts_[i]->data[1]) > span || abs(pts_[i]->data[2]) > span) {
+			//	continue;
+			//}
 
 			ofs << pts_[i]->data[0] << " " << pts_[i]->data[1] << " " << pts_[i]->data[2] 
 				<< " " << 0 << " " << 0 << " " << 0 << std::endl;
@@ -836,10 +930,10 @@ namespace objectsfm {
 
 			for (size_t j = 0; j < cam_pts.size(); j++)
 			{
-				if (abs(cam_pts[j](0)) > span || abs(cam_pts[j](1)) > span || abs(cam_pts[j](2)) > span)
-				{
-					continue;
-				}
+				//if (abs(cam_pts[j](0)) > span || abs(cam_pts[j](1)) > span || abs(cam_pts[j](2)) > span)
+				//{
+				//	continue;
+				//}
 
 				ofs << cam_pts[j](0) << " " << cam_pts[j](1) << " " << cam_pts[j](2)
 					<< " " << 255 << " " << 0 << " " << 0 << std::endl;
@@ -912,6 +1006,42 @@ namespace objectsfm {
 		{
 			double x = cams_[i]->pos_ac_.c(0);
 			double y = cams_[i]->pos_ac_.c(2);
+			int xx = (x - xmin) / step;
+			int yy = (y - ymin) / step;
+			cv::circle(img, cv::Point(xx, yy), 5, cv::Scalar(0, 0, 255));
+			cv::putText(img, std::to_string(i), cv::Point(xx, yy), 1, 1, cv::Scalar(255, 0, 0));
+		}
+		cv::imwrite(path, img);
+	}
+
+	void SLAMGPS::GrawSLAMGPS(std::string path)
+	{
+		double xmin = 1000000000000;
+		double xmax = -xmin;
+		double ymin = xmin;
+		double ymax = -ymin;
+		for (size_t i = 0; i < cams_gps_.size(); i++)
+		{
+			double x = cams_gps_[i].x;
+			double y = cams_gps_[i].y;
+			if (x < xmin) xmin = x;
+			if (x > xmax) xmax = x;
+			if (y < ymin) ymin = y;
+			if (y > ymax) ymax = y;
+		}
+
+		double xspan = xmax - xmin;
+		double yspan = ymax - ymin;
+		double span = MAX(xspan, yspan);
+		double step = (span + 0.1) / 2000;
+		int h = yspan / step;
+		int w = xspan / step;
+		cv::Mat img(h, w, CV_8UC3, cv::Scalar(255, 255, 255));
+
+		for (size_t i = 0; i < cams_gps_.size(); i++)
+		{
+			double x = cams_gps_[i].x;
+			double y = cams_gps_[i].y;
 			int xx = (x - xmin) / step;
 			int yy = (y - ymin) / step;
 			cv::circle(img, cv::Point(xx, yy), 5, cv::Scalar(0, 0, 255));
@@ -1202,7 +1332,13 @@ namespace objectsfm {
 
 	void SLAMGPS::SaveforMSP(std::string fold)
 	{
-		std::string file_msp = fold + "\\msp.qin";
+		std::string fold_msp = fold + "\\msp";
+		if (!std::experimental::filesystem::exists(fold_msp)) {
+			std::experimental::filesystem::create_directory(fold_msp);
+		}
+
+		std::string file_msp = fold_msp + "\\pose.qin";
+
 		std::ofstream ff(file_msp);
 		ff << std::fixed << std::setprecision(12);
 
@@ -1255,6 +1391,61 @@ namespace objectsfm {
 			}
 		}
 		std::cout << "outliers " << count_outliers << " inliers " << errors.size() - count_outliers << std::endl;
+	}
+
+	void SLAMGPS::AbsoluteOrientationWithGPS()
+	{
+		std::vector<Eigen::Vector3d> pts_cam(cams_.size());
+		std::vector<Eigen::Vector3d> pts_gps(cams_.size());
+		std::vector<double> weight(cams_.size());
+		for (size_t i = 0; i < cams_.size(); i++)
+		{
+			//pts_cam[i] = Eigen::Vector3d(cams_[i]->pos_rt_.t);
+			pts_cam[i] = Eigen::Vector3d(cams_[i]->pos_ac_.c);
+			pts_gps[i] = Eigen::Vector3d(cams_gps_[i].x, cams_gps_[i].y, cams_gps_[i].z);
+			weight[i] = 1.0;
+		}
+
+		Eigen::Matrix3d R;
+		Eigen::Vector3d t;
+		double scale = 0.0;
+		double err = 0.0;
+		SimilarityTransformation(pts_cam, pts_gps, weight, R, t, scale, err);
+		std::cout << R << std::endl;
+		std::cout << t << std::endl;
+		std::cout << scale << std::endl;
+		std::cout << err << std::endl;
+
+		// convert the coordinate of all the cams and points
+		for (size_t i = 0; i < cams_.size(); i++) {
+			cams_[i]->Transformation(R, t, scale);
+		}
+		for (size_t i = 0; i < pts_.size(); i++) {
+			pts_[i]->Transformation(R, t, scale);
+		}
+		for (size_t i = 0; i < pts_new_.size(); i++)
+		{
+			pts_new_[i]->Transformation(R, t, scale);
+		}
+
+		// subtract the offset
+		gps_offset_ = Eigen::Vector3d(0.0, 0.0, 0.0);
+		for (size_t i = 0; i < cams_.size(); i++) {
+			gps_offset_ += cams_[i]->pos_ac_.c;
+		}
+		gps_offset_ /= cams_.size();
+
+		Eigen::Matrix3d R_eye = Eigen::MatrixXd::Identity(3, 3);
+		for (size_t i = 0; i < cams_.size(); i++) {
+			cams_[i]->Transformation(R_eye, -gps_offset_, 1.0);
+		}
+		for (size_t i = 0; i < pts_.size(); i++) {
+			pts_[i]->Transformation(R_eye, -gps_offset_, 1.0);
+		}
+		for (size_t i = 0; i < pts_new_.size(); i++)
+		{
+			pts_new_[i]->Transformation(R_eye, -gps_offset_, 1.0);
+		}
 	}
 
 	void SLAMGPS::DrawPts(std::vector<int> img_ids, std::string fold)
@@ -1415,6 +1606,28 @@ namespace objectsfm {
 					}
 				}
 			}
+		}
+		ff.close();
+	}
+
+	void SLAMGPS::WriteGPSPose(std::string file)
+	{
+		std::ofstream ff(file);
+		ff << std::fixed << std::setprecision(8);
+		for (size_t i = 0; i < cams_gps_.size(); i++)
+		{
+			double x = cams_gps_[i].x;
+			double y = cams_gps_[i].y;
+			double z = cams_gps_[i].z;
+			ff << x << " " << y << " " << z << " 0 0 255" << std::endl;
+		}
+
+		for (size_t i = 0; i < cams_.size(); i++)
+		{
+			double x = cams_[i]->pos_ac_.c[0] + gps_offset_[0];
+			double y = cams_[i]->pos_ac_.c[1] + gps_offset_[1];
+			double z = cams_[i]->pos_ac_.c[2] + gps_offset_[2];
+			ff << x << " " << y << " " << z << " 255 0 0" << std::endl;
 		}
 		ff.close();
 	}

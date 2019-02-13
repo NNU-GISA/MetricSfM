@@ -404,4 +404,14 @@ void Point3D::UpdateFromData()
 	}
 }
 
+void Point3D::Transformation(Eigen::Matrix3d R, Eigen::Vector3d t, double scale)
+{
+	Eigen::Vector3d pt(data[0], data[1], data[2]);
+	pt = scale * R * pt + t;
+
+	data[0] = pt[0];
+	data[1] = pt[1];
+	data[2] = pt[2];
+}
+
 }  // namespace objectsfm

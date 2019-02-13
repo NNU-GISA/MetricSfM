@@ -76,6 +76,16 @@ void Camera::SetACPose(Eigen::Vector3d a, Eigen::Vector3d c)
 	UpdateDataFromPose();
 }
 
+void Camera::Transformation(Eigen::Matrix3d R, Eigen::Vector3d t, double scale)
+{
+	pos_rt_.R = pos_rt_.R * R.inverse();
+	pos_ac_.c = scale * R * pos_ac_.c + t;
+	pos_rt_.t = -pos_rt_.R * pos_ac_.c;
+	rotation::RotationMatrixToAngleAxis(pos_rt_.R, pos_ac_.a);
+	
+	UpdateDataFromPose();
+}
+
 void Camera::UpdateDataFromPose()
 {
 	// pose angle aixs
