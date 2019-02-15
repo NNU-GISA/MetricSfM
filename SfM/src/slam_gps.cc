@@ -53,6 +53,7 @@ namespace objectsfm {
 		cols = 4000;
 		th_outlier = 3.0;
 		resize_ratio = 0.5;	
+		use_slam_pt_ = false;
 	}
 
 	SLAMGPS::~SLAMGPS()
@@ -61,10 +62,18 @@ namespace objectsfm {
 
 	void SLAMGPS::Run(std::string fold)
 	{
+		std::cout << "begin..." << std::endl;
+		//Convert2GPSDense(fold);
+		//Convert2GPS(fold);
+		//exit(0);
+
+		/*************************/
+		/* Part 1: pre-processing*/
+		/*************************/
+
 		// read in slam information
 		std::string file_slam = fold + "\\KeyFramePts.txt";
 		ReadinSLAM(file_slam);
-
 		WriteCameraPointsOut(fold + "\\cam_pts1.txt");
 
 		// read in gps
@@ -76,50 +85,53 @@ namespace objectsfm {
 		std::string file_rgb = fold + "\\rgb.txt";
 		AssociateCameraGPS(file_rgb, gps_info);
 
-		//std::vector<int> img_ids = { 1,2,3,4,5,6,7,8,9 };
-		//DrawPts(img_ids, fold + "\\undistort_image");
 
-		GrawGPS(fold + "\\gps_pos.bmp");
-		GrawSLAM(fold + "\\slam_pos1.bmp");
-		GrawSLAMGPS(fold + "\\slam_gps.bmp");
+		/**********************************************/
+		/* Part 2: matching, triangulation, and bundle*/
+		/**********************************************/
 
 		// feature extraction
 		fold_image_ = fold + "\\original";
 		FeatureExtraction(fold);
 
 		// convert to the gps world coordinates
-		std::cout << "begin converting" << std::endl;
-		AbsoluteOrientationWithGPS();
-		std::cout << "finish converting" << std::endl;
+		AbsoluteOrientationWithGPSGlobal();
 		WriteGPSPose(fold + "\\gps_pos.txt");
-
-		WriteCameraPointsOut(fold + "\\cam_pts1.txt");
+		WriteOffset(fold + "\\offset.txt");
 
 		// feature matching with pose information
 		if (0) {
 			FeatureMatching(fold);
 		}
-		Triangulation(fold);
 
+		// triangulation
+		Triangulation(fold);
 		WriteCameraPointsOut(fold + "\\cam_pts2.txt");
+
+
+		GPSRegistration2(fold);
+		WriteCameraPointsOut(fold + "\\cam_pts3.txt");
 
 		// do adjustment
 		FullBundleAdjustment();
 		std::cout << 2 << std::endl;
 		std::string file_accu = fold + "\\accuracy.txt";
 		GetAccuracy(file_accu, cam_models_, cams_, pts_);
+		WriteCameraPointsOut(fold + "\\cam_pts4.txt");
 
-		// write out
-		WriteCameraPointsOut(fold + "\\cam_pts3.txt");
-		GrawSLAM(fold + "\\slam_pos2.bmp");
+		Convert2GPS(fold);
+
+		/**************************/
+		/* Part 3: write out*/
+		/**************************/
 
 		// save
 		std::cout << "saving output..." << std::endl;
 		SaveUndistortedImage(fold);
 
-		SaveforOpenMVS(fold);
-
 		SaveforCMVS(fold);
+
+		SaveforOpenMVS(fold);
 
 		SaveforMSP(fold);
 	}
@@ -184,7 +196,7 @@ namespace objectsfm {
 				}
 				int idx_cam = iter_i_c->second;
 
-				pts_[i]->AddObservation(cams_[idx_cam], px - cx, py - cy, j);
+				pts_[i]->AddObservation(cams_[idx_cam], (px - cx) / resize_ratio, (py - cy) / resize_ratio, j);
 			}
 		}
 
@@ -212,13 +224,24 @@ namespace objectsfm {
 		int id;
 		double lat, lon, alt;
 		double x, y;
+		std::vector<int> gps_ids;
+		std::vector<cv::Point3d> gps_pts;
+		double alt_avg = 0.0;
 		while (!ff.eof())
 		{
 			ff >> id >> lat >> lon >> alt;
 			LLtoUTM(ellipsoid_id, lat, lon, y, x, (char*)zone_id.c_str());
-			gps_info.insert(std::pair<int, cv::Point3d>(id, cv::Point3d(x, y, alt)));
+			gps_pts.push_back(cv::Point3d(x, y, alt));
+			gps_ids.push_back(id);
+			alt_avg += alt;
 		}
 		ff.close();
+
+		alt_avg /= gps_pts.size();
+		for (size_t i = 0; i < gps_pts.size(); i++)
+		{
+			gps_info.insert(std::pair<int, cv::Point3d>(gps_ids[i], cv::Point3d(gps_pts[i].x, gps_pts[i].y, alt_avg)));
+		}
 	}
 
 	void SLAMGPS::AssociateCameraGPS(std::string file_rgb, std::map<int, cv::Point3d>& gps_info)
@@ -352,10 +375,10 @@ namespace objectsfm {
 							int id_cam = it2->second->id_;
 							std::map<int, int >::iterator iter = cams_info.find(id_cam);
 							if (iter->second == i) {
-								pts1.push_back(cv::Point2f(it1->second(0), it1->second(1)) * (1.0 / resize_ratio));
+								pts1.push_back(cv::Point2f(it1->second(0), it1->second(1)));
 							}
 							if (iter->second == j) {
-								pts2.push_back(cv::Point2f(it1->second(0), it1->second(1)) * (1.0 / resize_ratio));
+								pts2.push_back(cv::Point2f(it1->second(0), it1->second(1)));
 							}
 							it1++;  it2++;
 						}
@@ -539,7 +562,7 @@ namespace objectsfm {
 
 		// data association
 		std::map<int, int> pts_points_map;
-		for (size_t i = 0; i < n_img; i++)
+		for (size_t i = 0; i <n_img; i++)
 		{
 			std::cout << i << " " << pts_new_.size() << std::endl;
 			std::vector<int> ids;
@@ -616,7 +639,7 @@ namespace objectsfm {
 		for (size_t i = 0; i < pts_new_.size(); i++)
 		{
 			bool is_ok = pts_new_[i]->Trianglate2(th_outlier, th_tri_angle);
-			if (!is_ok || pts_new_[i]->cams_.size() < 2) {
+			if (!is_ok || pts_new_[i]->cams_.size() < 3) {
 			//if (!is_ok) {
 				pts_new_[i]->is_bad_estimated_ = true;
 				count_bad++;
@@ -625,11 +648,27 @@ namespace objectsfm {
 		std::cout << "count_bad " << count_bad << " count_good " << pts_new_.size() - count_bad << std::endl;
 		
 		// accuracy analysis
-		pts_ = pts_new_;
+		std::cout << "pts slam " << pts_.size() << std::endl;
+		std::cout << "pts sfm " << pts_new_.size() << std::endl;
+		if (use_slam_pt_) {
+			for (size_t i = 0; i < pts_new_.size(); i++) {
+				pts_.push_back(pts_new_[i]);
+			}
+		}
+		else {
+			pts_ = pts_new_;
+		}
+		std::cout << "pts all " << pts_.size() << std::endl;
+
 		std::string file_accu = fold + "\\accuracy.txt";
 		GetAccuracy(file_accu, cam_models_, cams_, pts_);
 
 		//WriteCameraPointsOut(fold + "\\slam_cam_pts2.txt");
+	}
+
+	void SLAMGPS::Dilution(std::string fold)
+	{
+
 	}
 
 	void SLAMGPS::FullBundleAdjustment()
@@ -638,9 +677,9 @@ namespace objectsfm {
 		ceres::Solver::Options options;
 		ceres::Solver::Summary summary;
 
-		options.max_num_iterations = 100;
+		options.max_num_iterations = 200;
 		options.minimizer_progress_to_stdout = true;
-		options.num_threads = 4;
+		options.num_threads = 8;
 		options.linear_solver_type = ceres::DENSE_SCHUR;
 
 		// add reprojection error
@@ -675,21 +714,21 @@ namespace objectsfm {
 		int count2 = 0, count3 = 0;
 		if (1)
 		{
-			bool use_relative_gps_angle = true;
+			bool use_relative_gps_angle = false;
 			bool use_relative_gps_dis = false;
-			bool use_absolute_gps = false;
+			bool use_absolute_gps = true;
 			if (use_relative_gps_angle)
 			{
-				double ddx = cams_[0]->pos_ac_.c[0] - cams_[2]->pos_ac_.c[0];
-				double ddy = cams_[0]->pos_ac_.c[1] - cams_[2]->pos_ac_.c[1];
-				double ddz = cams_[0]->pos_ac_.c[2] - cams_[2]->pos_ac_.c[2];
+				double ddx = cams_[0]->pos_ac_.c[0] - cams_[10]->pos_ac_.c[0];
+				double ddy = cams_[0]->pos_ac_.c[1] - cams_[10]->pos_ac_.c[1];
+				double ddz = cams_[0]->pos_ac_.c[2] - cams_[10]->pos_ac_.c[2];
 				double len_baseline = std::sqrt(ddx * ddx + ddy * ddy + ddz * ddz);
 				len_baseline /= 2.0;
-				float th_triangle_len = 50.0 * len_baseline;
+				float th_triangle_len = 10.0 * len_baseline;
 
 				int step = 2;
-				double weight = 100;
-				for (int i = 6; i < cams_.size(); i++)
+				double weight = 1000.0;
+				for (int i = 6; i < cams_.size() - 10; i++)
 				{
 					int id1 = i;
 					int k = (i - 6) / 2;
@@ -715,6 +754,10 @@ namespace objectsfm {
 						double angle1 = acos((v12.x*v13.x + v12.y*v13.y) / l12 / l13);
 						double angle2 = acos((-v12.x*v23.x - v12.y*v23.y) / l12 / l23);
 						double angle3 = acos((v13.x*v23.x + v13.y*v23.y) / l13 / l23);
+						if (angle1 != angle1 || angle2 != angle2 || angle3 != angle3)
+						{
+							continue;
+						}
 
 						ceres::LossFunction* loss_function = new ceres::HuberLoss(1.0);
 						ceres::CostFunction* cost_function;
@@ -777,11 +820,8 @@ namespace objectsfm {
 				{
 					ceres::LossFunction* loss_function = new ceres::HuberLoss(1.0);
 					ceres::CostFunction* cost_function;
-					double weight = pts_.size() / cams_.size() * 10;
-					cost_function = GPSErrorPoseAbsolute::Create(cams_gps_[i].x - gps_offset_(0),
-						cams_gps_[i].y - gps_offset_(1), 
-						cams_gps_[i].z - gps_offset_(2), 
-						weight);
+					double weight = count1 / cams_.size();
+					cost_function = GPSErrorPoseAbsolute::Create(cams_gps_[i].x, cams_gps_[i].y , cams_gps_[i].z, weight);
 					problem.AddResidualBlock(cost_function, loss_function, cams_[i]->data);
 
 					count3++;
@@ -820,6 +860,125 @@ namespace objectsfm {
 		std::cout << cams_[0]->cam_model_->dcx_ << " ";
 		std::cout << cams_[0]->cam_model_->dcy_ << std::endl;
 	}
+
+	void SLAMGPS::GPSRegistration(std::string fold)
+	{
+		// calculate the transformation of cam to gps
+		std::vector<Eigen::Matrix3d> Rs_local;
+		std::vector<Eigen::Vector3d> ts_local;
+		AbsoluteOrientationWithGPSLocal(50, Rs_local, ts_local);
+
+		// transform all the 3d points via cam tramsform
+		std::map<int, int> cams_info;
+		for (size_t i = 0; i < cams_.size(); i++) {
+			cams_info.insert(std::pair<int, int>(cams_[i]->id_, i));
+		}
+
+		for (size_t i = 0; i < pts_.size(); i++)
+		{
+			if (i%1000 == 0)
+			{
+				std::cout << i << std::endl;
+			}
+
+			if (pts_[i]->is_bad_estimated_) {
+				continue;
+			}
+
+			auto it = pts_[i]->cams_.begin();
+			Eigen::Vector3d pt_avg(0.0, 0.0, 0.0);
+			std::vector<Eigen::Vector3d> pts_new;
+			while (it != pts_[i]->cams_.end())
+			{
+				int id_temp = it->second->id_;
+				std::map<int, int >::iterator iter = cams_info.find(id_temp);
+				int id_cam = iter->second;
+
+				// new point after transformation
+				Eigen::Vector3d pt(pts_[i]->data[0], pts_[i]->data[1], pts_[i]->data[2]);
+				pt = Rs_local[id_cam] * pt + ts_local[id_cam];
+				pts_new.push_back(pt);
+				pt_avg += pt;
+				//break;
+
+				it++;
+			}
+
+			// averaging as the final result
+			pts_[i]->data[0] = pt_avg[0] / pts_new.size();
+			pts_[i]->data[1] = pt_avg[1] / pts_new.size();
+			pts_[i]->data[2] = pt_avg[2] / pts_new.size();
+		}
+		//WriteCameraPointsOut(fold + "\\cam_pts4.txt");
+	}
+
+
+	void SLAMGPS::GPSRegistration2(std::string fold)
+	{
+		// calculate the offset of each cam to the gps
+		std::vector<cv::Point3d> cam_offset(cams_.size());
+		for (size_t i = 0; i < cams_.size(); i++) {
+			cam_offset[i] = cams_gps_[i] - cv::Point3d(cams_[i]->pos_ac_.c[0], cams_[i]->pos_ac_.c[1], cams_[i]->pos_ac_.c[2]);
+			//cams_[i]->SetACPose(cams_[i]->pos_ac_.a, Eigen::Vector3d(cams_gps_[i].x, cams_gps_[i].y, cams_gps_[i].z));
+		}
+		
+
+		// transform all the 3d points via cam offset
+		std::map<int, int> cams_info;
+		for (size_t i = 0; i < cams_.size(); i++) {
+			cams_info.insert(std::pair<int, int>(cams_[i]->id_, i));
+		}
+
+		for (size_t i = 0; i < pts_.size(); i++)
+		{
+			if (i % 1000 == 0)
+			{
+				std::cout << i << std::endl;
+			}
+
+			if (pts_[i]->is_bad_estimated_) {
+				continue;
+			}
+
+			cv::Point3d offset_i(0.0, 0.0, 0.0);
+			double weight_i = 0.0;
+			auto it = pts_[i]->cams_.begin();
+			while (it != pts_[i]->cams_.end())
+			{
+				int id_temp = it->second->id_;
+				std::map<int, int >::iterator iter = cams_info.find(id_temp);
+				int id_cam = iter->second;
+
+				// new point after transformation
+				double dx = pts_[i]->data[0] - cams_[id_cam]->pos_ac_.c(0);
+				double dy = pts_[i]->data[1] - cams_[id_cam]->pos_ac_.c(1);
+				double dz = pts_[i]->data[2] - cams_[id_cam]->pos_ac_.c(2);
+				double dis = sqrt(dx * dx + dy * dy + dz * dz);
+				double w = 1.0 / (sqrt(dis) + 5.0);
+				weight_i += w;
+				offset_i += w * cam_offset[id_cam];
+
+				if (i % 1000 == 0)
+				{
+					std::cout << "weight_i " << weight_i << std::endl;
+					std::cout << "offset_i " << offset_i << std::endl;
+				}
+
+				it++;
+			}
+			offset_i /= weight_i;
+
+			// averaging as the final result
+			pts_[i]->data[0] += offset_i.x;
+			pts_[i]->data[1] += offset_i.y;
+			pts_[i]->data[2] += offset_i.z;
+		}
+		
+		for (size_t i = 0; i < cams_.size(); i++) {
+			cams_[i]->SetACPose(cams_[i]->pos_ac_.a, Eigen::Vector3d(cams_gps_[i].x, cams_gps_[i].y, cams_gps_[i].z));
+		}
+	}
+
 
 	void SLAMGPS::SaveModel()
 	{
@@ -1219,115 +1378,153 @@ namespace objectsfm {
 
 	void SLAMGPS::SaveforCMVS(std::string fold)
 	{
-		std::string fold_cmvs = fold + "\\cmvs";
-		if (!std::experimental::filesystem::exists(fold_cmvs)) {
-			std::experimental::filesystem::create_directory(fold_cmvs);
-		}
-		std::string fold_img = fold_cmvs + "\\visualize";
-		if (!std::experimental::filesystem::exists(fold_img)) {
-			std::experimental::filesystem::create_directory(fold_img);
-		}
-		std::string fold_txt = fold_cmvs + "\\txt";
-		if (!std::experimental::filesystem::exists(fold_txt)) {
-			std::experimental::filesystem::create_directory(fold_txt);
-		}
-		std::string fold_rgb = fold + "\\undistort_image";
+		int ncluster = cams_.size() / 500;
+		int nstep = cams_.size() / ncluster;
 
-		// step1: save bundle
-		std::string file_para = fold_cmvs + "\\bundle.rd.out";
-		int count_good = pts_.size();
-		std::vector<int> num_goods(pts_.size(), 0);
-		for (size_t i = 0; i < pts_.size(); i++)
-		{
-			if (pts_[i]->is_bad_estimated_)
-			{
-				count_good--;
-			}
-		}
-
-		//
-		std::ofstream ff(file_para);
-		ff << std::fixed << std::setprecision(8);
-
-		// cams
-		ff << "# Bundle file v0.3" << std::endl;
-		ff << cams_.size() << " " << count_good << std::endl;
-		for (size_t i = 0; i < cams_.size(); i++)
-		{
-			ff << cams_[0]->cam_model_->f_ << " " << cams_[0]->cam_model_->k1_ << " " << cams_[0]->cam_model_->k2_ << std::endl;
-			ff << cams_[i]->pos_rt_.R(0, 0) << " " << cams_[i]->pos_rt_.R(0, 1) << " " << cams_[i]->pos_rt_.R(0, 2) << " "
-				<< cams_[i]->pos_rt_.R(1, 0) << " " << cams_[i]->pos_rt_.R(1, 1) << " " << cams_[i]->pos_rt_.R(1, 2) << " "
-				<< cams_[i]->pos_rt_.R(2, 0) << " " << cams_[i]->pos_rt_.R(2, 1) << " " << cams_[i]->pos_rt_.R(2, 2) << std::endl;
-			ff << cams_[i]->pos_rt_.t(0) << " " << cams_[i]->pos_rt_.t(1) << " " << cams_[i]->pos_rt_.t(2) << std::endl;
-		}
-
-		// points
 		std::map<int, int> cams_info;
 		for (size_t i = 0; i < cams_.size(); i++) {
 			cams_info.insert(std::pair<int, int>(cams_[i]->id_, i));
 		}
 
-		for (size_t i = 0; i < pts_.size(); i++)
+		for (size_t k = 0; k < ncluster; k++)
 		{
-			if (pts_[i]->is_bad_estimated_)
-			{
-				continue;
+			int cam_ids = k * nstep;
+			int cam_ide = (k + 1) * nstep;
+			if (cam_ide > cams_.size()) {
+				cam_ide = cams_.size();
 			}
 
-			ff << pts_[i]->data[0] << " " << pts_[i]->data[1] << " " << pts_[i]->data[2] << " ";
-			ff << 255 << " " << 255 << " " << 255 << " ";
-			ff << pts_[i]->pts2d_.size() << std::endl;
+			std::string fold_cmvs = fold + "\\cmvs" + std::to_string(k);
 
-			auto it1 = pts_[i]->pts2d_.begin();
-			auto it2 = pts_[i]->cams_.begin();
-			while (it1 != pts_[i]->pts2d_.end())
-			{
-				int idx_pt = it2->first;
-				int id_cam = it2->second->id_;
-				std::map<int, int >::iterator iter = cams_info.find(id_cam);
-
-				int x = it1->second(0);
-				int y = it1->second(1);
-				ff << iter->second << " " << idx_pt << " " << float(x) << " " << float(y) << std::endl;
-				it1++;  it2++;
+			if (!std::experimental::filesystem::exists(fold_cmvs)) {
+				std::experimental::filesystem::create_directory(fold_cmvs);
 			}
-		}
-		ff.close();
+			std::string fold_img = fold_cmvs + "\\visualize";
+			if (!std::experimental::filesystem::exists(fold_img)) {
+				std::experimental::filesystem::create_directory(fold_img);
+			}
+			std::string fold_txt = fold_cmvs + "\\txt";
+			if (!std::experimental::filesystem::exists(fold_txt)) {
+				std::experimental::filesystem::create_directory(fold_txt);
+			}
+			std::string fold_rgb = fold + "\\undistort_image";
 
-		// step2: save txt and image
-		for (size_t i = 0; i < cams_.size(); i++)
-		{
-			std::string name = std::to_string(i);
-			name = std::string(8 - name.length(), '0') + name;
-
-			// txt
-			Eigen::Matrix3d R = cams_[i]->pos_rt_.R;
-			Eigen::Vector3d t = cams_[i]->pos_rt_.t;
-			cv::Mat M = (cv::Mat_<double>(3, 4) << R(0, 0), R(0, 1), R(0, 2), t(0),
-				                                   R(1, 0), R(1, 1), R(1, 2), t(1),
-				                                   R(2, 0), R(2, 1), R(2, 2), t(2));
-			cv::Mat K = (cv::Mat_<double>(3, 3) << cams_[0]->cam_model_->f_, 0, cams_[0]->cam_model_->px_,
-				0, cams_[0]->cam_model_->f_, cams_[0]->cam_model_->py_,
-				0, 0, 1);
-			cv::Mat P = K * M;
-
-			std::ofstream ff(fold_txt + "\\" + name + ".txt");
-			ff << std::fixed << std::setprecision(8);
-			ff << "CONTOUR" << std::endl;
-			for (size_t m = 0; m < 3; m++) {
-				for (size_t n = 0; n < 4; n++) {
-					ff << P.at<double>(m, n) << " ";
+			// step0: find pts belonging to the clusters
+			std::vector<int> pt_ids;
+			for (size_t i = 0; i < pts_.size(); i++)
+			{
+				if (pts_[i]->is_bad_estimated_) {
+					continue;
 				}
-				ff << std::endl;
+
+				auto it = pts_[i]->cams_.begin();
+				while (it != pts_[i]->cams_.end())
+				{
+					int id_cam = it->second->id_;
+					std::map<int, int >::iterator iter = cams_info.find(id_cam);
+					if (iter->second >= cam_ids && iter->second < cam_ide) {
+						pt_ids.push_back(i);
+						break;
+					}
+					it++;
+				}
+			}
+
+
+			// step1: save bundle
+			std::string file_para = fold_cmvs + "\\bundle.rd.out";
+
+			//
+			std::ofstream ff(file_para);
+			ff << std::fixed << std::setprecision(8);
+
+			// cams
+			std::cout << 111 << std::endl;
+			ff << "# Bundle file v0.3" << std::endl;
+			ff << cam_ide - cam_ids << " " << pt_ids.size() << std::endl;
+			for (size_t i = cam_ids; i < cam_ide; i++)
+			{
+				ff << cams_[0]->cam_model_->f_ << " " << cams_[0]->cam_model_->k1_ << " " << cams_[0]->cam_model_->k2_ << std::endl;
+				ff << cams_[i]->pos_rt_.R(0, 0) << " " << cams_[i]->pos_rt_.R(0, 1) << " " << cams_[i]->pos_rt_.R(0, 2) << " "
+					<< cams_[i]->pos_rt_.R(1, 0) << " " << cams_[i]->pos_rt_.R(1, 1) << " " << cams_[i]->pos_rt_.R(1, 2) << " "
+					<< cams_[i]->pos_rt_.R(2, 0) << " " << cams_[i]->pos_rt_.R(2, 1) << " " << cams_[i]->pos_rt_.R(2, 2) << std::endl;
+				ff << cams_[i]->pos_rt_.t(0) << " " << cams_[i]->pos_rt_.t(1) << " " << cams_[i]->pos_rt_.t(2) << std::endl;
+			}
+
+			std::cout << 222 << std::endl;
+			// points
+			for (size_t i = 0; i < pt_ids.size(); i++)
+			{
+				int pt_id = pt_ids[i];
+				ff << pts_[pt_id]->data[0] << " " << pts_[pt_id]->data[1] << " " << pts_[pt_id]->data[2] << " ";
+				ff << 255 << " " << 255 << " " << 255 << " ";
+				int count_cams = 0;
+				auto it = pts_[pt_id]->cams_.begin();
+				while (it != pts_[pt_id]->cams_.end())
+				{
+					int id_cam = it->second->id_;
+					std::map<int, int >::iterator iter = cams_info.find(id_cam);
+					if (iter->second >= cam_ids && iter->second < cam_ide) {
+						count_cams++;
+					}
+					it++;
+				}
+				ff << count_cams << std::endl;
+
+				auto it1 = pts_[pt_id]->pts2d_.begin();
+				auto it2 = pts_[pt_id]->cams_.begin();
+				while (it1 != pts_[pt_id]->pts2d_.end())
+				{
+					int idx_pt = it1->first;
+					int id_cam = it2->second->id_;
+					std::map<int, int >::iterator iter = cams_info.find(id_cam);
+					if (iter->second >= cam_ids && iter->second < cam_ide) {
+						int x = it1->second(0);
+						int y = it1->second(1);
+						ff << iter->second - cam_ids << " " << idx_pt << " " << float(x) << " " << float(y) << std::endl;
+					}
+					it1++;  it2++;
+				}
 			}
 			ff.close();
+			std::cout << 333 << std::endl;
 
-			// image
-			std::string file_img_in = fold_rgb + "\\" + cams_name_[i] + ".jpg";
-			std::string file_img_out = fold_img + "\\" + name + ".jpg";
-			cv::Mat img = cv::imread(file_img_in);
-			cv::imwrite(file_img_out, img);
+			// step2: save txt and image
+			for (size_t i = cam_ids; i < cam_ide; i++)
+			{
+				std::string name = std::to_string(i- cam_ids);
+				name = std::string(8 - name.length(), '0') + name;
+
+				// txt
+				Eigen::Matrix3d R = cams_[i]->pos_rt_.R;
+				Eigen::Vector3d t = cams_[i]->pos_rt_.t;
+				cv::Mat M = (cv::Mat_<double>(3, 4) << R(0, 0), R(0, 1), R(0, 2), t(0),
+					R(1, 0), R(1, 1), R(1, 2), t(1),
+					R(2, 0), R(2, 1), R(2, 2), t(2));
+				cv::Mat K = (cv::Mat_<double>(3, 3) << cams_[0]->cam_model_->f_, 0, cams_[0]->cam_model_->px_,
+					0, cams_[0]->cam_model_->f_, cams_[0]->cam_model_->py_,
+					0, 0, 1);
+				cv::Mat P = K * M;
+
+				std::ofstream ff(fold_txt + "\\" + name + ".txt");
+				ff << std::fixed << std::setprecision(8);
+				ff << "CONTOUR" << std::endl;
+				for (size_t m = 0; m < 3; m++) {
+					for (size_t n = 0; n < 4; n++) {
+						ff << P.at<double>(m, n) << " ";
+					}
+					ff << std::endl;
+				}
+				ff.close();
+
+				// image
+				std::string file_img_in = fold_rgb + "\\" + cams_name_[i] + ".jpg";
+				std::string file_img_out = fold_img + "\\" + name + ".jpg";
+				cv::Mat img = cv::imread(file_img_in);
+				cv::imwrite(file_img_out, img);
+			}
 		}
+		
 	}
 
 	void SLAMGPS::SaveforMSP(std::string fold)
@@ -1393,17 +1590,36 @@ namespace objectsfm {
 		std::cout << "outliers " << count_outliers << " inliers " << errors.size() - count_outliers << std::endl;
 	}
 
-	void SLAMGPS::AbsoluteOrientationWithGPS()
+	void SLAMGPS::AbsoluteOrientationWithGPSGlobal()
 	{
 		std::vector<Eigen::Vector3d> pts_cam(cams_.size());
 		std::vector<Eigen::Vector3d> pts_gps(cams_.size());
 		std::vector<double> weight(cams_.size());
 		for (size_t i = 0; i < cams_.size(); i++)
 		{
-			//pts_cam[i] = Eigen::Vector3d(cams_[i]->pos_rt_.t);
 			pts_cam[i] = Eigen::Vector3d(cams_[i]->pos_ac_.c);
 			pts_gps[i] = Eigen::Vector3d(cams_gps_[i].x, cams_gps_[i].y, cams_gps_[i].z);
-			weight[i] = 1.0;
+
+			// calculate the weights
+			int ids = i - 20; 
+			if (ids < 0) {
+				ids = 0;
+			}
+			int ide = i + 20;
+			if (ide > cams_.size() - 1) {
+				ide = cams_.size() - 1;
+			}
+			double dxs = pts_gps[ids][0] - pts_gps[i][0];
+			double dys = pts_gps[ids][1] - pts_gps[i][1];
+			double dxe = pts_gps[ide][0] - pts_gps[i][0];
+			double dye = pts_gps[ide][1] - pts_gps[i][1];
+			double angle = acos((dxs * dxe + dys * dye) / sqrt(dxs * dxs + dys * dys + 0.1) / sqrt(dxe * dxe + dye * dye + 0.1));
+			angle = abs(angle - CV_PI);
+			if (angle >= CV_PI * 80.0 / 180.0) {
+				angle = CV_PI * 80.0 / 180.0;
+			}
+			weight[i] = tan(angle);
+			std::cout << weight[i] << std::endl;
 		}
 
 		Eigen::Matrix3d R;
@@ -1411,10 +1627,10 @@ namespace objectsfm {
 		double scale = 0.0;
 		double err = 0.0;
 		SimilarityTransformation(pts_cam, pts_gps, weight, R, t, scale, err);
-		std::cout << R << std::endl;
-		std::cout << t << std::endl;
-		std::cout << scale << std::endl;
-		std::cout << err << std::endl;
+		//std::cout << R << std::endl;
+		//std::cout << t << std::endl;
+		//std::cout << scale << std::endl;
+		//std::cout << err << std::endl;
 
 		// convert the coordinate of all the cams and points
 		for (size_t i = 0; i < cams_.size(); i++) {
@@ -1445,6 +1661,59 @@ namespace objectsfm {
 		for (size_t i = 0; i < pts_new_.size(); i++)
 		{
 			pts_new_[i]->Transformation(R_eye, -gps_offset_, 1.0);
+		}
+		for (size_t i = 0; i < cams_gps_.size(); i++)
+		{
+			cams_gps_[i].x -= gps_offset_[0];
+			cams_gps_[i].y -= gps_offset_[1];
+			cams_gps_[i].z -= gps_offset_[2];
+		}
+	}
+
+	void SLAMGPS::AbsoluteOrientationWithGPSLocal(int range, std::vector<Eigen::Matrix3d> &Rs_local, std::vector<Eigen::Vector3d> &ts_local)
+	{
+		//std::vector<Eigen::Matrix3d> Rs_local;
+		//std::vector<Eigen::Vector3d> ts_local;
+		double scale = 1.0;
+		for (size_t k = 0; k < cams_.size(); k++)
+		{
+			//std::cout << k << std::endl;
+			std::vector<Eigen::Vector3d> pts_cam_local;
+			std::vector<Eigen::Vector3d> pts_gps_local;
+			std::vector<double> weight_local;
+			Eigen::Vector3d pt_cam_ref = scale * cams_[k]->pos_ac_.c;
+			int step = range;
+			int idxs = std::max(0, int(k - step));
+			int idxe = std::min(int(cams_.size()), int(k + step));
+
+			for (size_t i = idxs; i < idxe; i++)
+			{
+				pts_cam_local.push_back(scale * Eigen::Vector3d(cams_[i]->pos_ac_.c));
+				pts_gps_local.push_back(Eigen::Vector3d(cams_gps_[i].x, cams_gps_[i].y, cams_gps_[i].z));
+
+				double dis = std::abs(int(i - k));
+				weight_local.push_back(1.0 / (dis + 1.0));
+				//weight_local[i] = 1.0;
+			}
+
+			for (size_t i = 0; i < cams_.size(); i++)
+			{
+				pts_cam_local.push_back(scale * Eigen::Vector3d(cams_[i]->pos_ac_.c));
+				pts_gps_local.push_back(Eigen::Vector3d(cams_gps_[i].x, cams_gps_[i].y, cams_gps_[i].z));
+
+				weight_local.push_back(0.001);
+			}
+
+			Eigen::Matrix3d R_local;
+			Eigen::Vector3d t_local;
+			double err_local = 0.0;
+			double scale_local = 0.0;
+			RigidTransformation(pts_cam_local, pts_gps_local, weight_local, R_local, t_local, err_local);
+			//SimilarityTransformation(pts_cam_local, pts_gps_local, weight_local, R_local, t_local, scale_local, err_local);
+
+			// convert the coordinate of all the cams and points
+			Rs_local.push_back(R_local);
+			ts_local.push_back(t_local);
 		}
 	}
 
@@ -1624,12 +1893,93 @@ namespace objectsfm {
 
 		for (size_t i = 0; i < cams_.size(); i++)
 		{
-			double x = cams_[i]->pos_ac_.c[0] + gps_offset_[0];
-			double y = cams_[i]->pos_ac_.c[1] + gps_offset_[1];
-			double z = cams_[i]->pos_ac_.c[2] + gps_offset_[2];
+			double x = cams_[i]->pos_ac_.c[0];
+			double y = cams_[i]->pos_ac_.c[1];
+			double z = cams_[i]->pos_ac_.c[2];
 			ff << x << " " << y << " " << z << " 255 0 0" << std::endl;
 		}
 		ff.close();
+	}
+
+	void SLAMGPS::WriteOffset(std::string file)
+	{
+		std::ofstream ff(file);
+		ff << std::fixed << std::setprecision(8);
+		ff << gps_offset_[0] << " " << gps_offset_[1] << " " << gps_offset_[2] << std::endl;
+		ff.close();
+	}
+
+	void SLAMGPS::Convert2GPS(std::string fold)
+	{
+		std::string file_pts = fold + "\\cam_pts4.txt";
+		std::vector<cv::Point3d> pts;
+		std::vector<cv::Point3i> colors;
+		std::ifstream ff(file_pts);
+		double x, y, z;
+		int r, g, b;
+		while (!ff.eof())
+		{
+			ff >> x >> y >> z >> r >> g >> b;
+			pts.push_back(cv::Point3d(x, y, z));
+			colors.push_back(cv::Point3i(r, g, b));
+		}
+		ff.close();
+
+		//
+		std::string file_offset = fold + "\\offset.txt";
+		double offx, offy, offz;
+		std::ifstream fff(file_offset);
+		fff >> offx >> offy >> offz;
+
+		// write out
+		std::string file_pts_gps = fold + "\\cam_pts5.txt";
+		std::ofstream fout(file_pts_gps);
+		fout << std::fixed << std::setprecision(8);
+		for (size_t i = 0; i < pts.size(); i++)
+		{
+			fout << pts[i].x + offx << " " << pts[i].y + offy << " " << pts[i].z + offz << " ";
+			fout << colors[i].x << " " << colors[i].y << " " << colors[i].z << std::endl;
+		}
+		fout.close();
+
+	}
+
+	void SLAMGPS::Convert2GPSDense(std::string fold)
+	{
+		std::string file_pts = fold + "\\dense_all.txt";
+		std::vector<cv::Point3d> pts;
+		std::vector<cv::Point3i> colors;
+		std::vector<cv::Point3d> normals;
+		std::ifstream ff(file_pts);
+		double x, y, z;
+		int r, g, b;
+		double nx, ny, nz;
+		while (!ff.eof())
+		{
+			ff >> x >> y >> z >> r >> g >> b >> nx >> ny >> nz;
+			pts.push_back(cv::Point3d(x, y, z));
+			colors.push_back(cv::Point3i(r, g, b));
+			normals.push_back(cv::Point3d(nx, ny, nz));
+		}
+		ff.close();
+
+		//
+		std::string file_offset = fold + "\\offset.txt";
+		double offx, offy, offz;
+		std::ifstream fff(file_offset);
+		fff >> offx >> offy >> offz;
+
+		// write out
+		std::string file_pts_gps = fold + "\\dense_all_gps.txt";
+		std::ofstream fout(file_pts_gps);
+		fout << std::fixed << std::setprecision(8);
+		for (size_t i = 0; i < pts.size(); i++)
+		{
+			fout << pts[i].x + offx << " " << pts[i].y + offy << " " << pts[i].z + offz << " ";
+			fout << colors[i].x << " " << colors[i].y << " " << colors[i].z << " ";
+			fout << normals[i].x << " " << normals[i].y << " " << normals[i].z << std::endl;
+		}
+		fout.close();
 	}
 
 }  // namespace objectsfm

@@ -56,8 +56,15 @@ public:
 	// triangulation
 	void Triangulation(std::string fold);
 
+	void Dilution(std::string fold);
+
 	// bundle
 	void FullBundleAdjustment();
+
+	// gps registration
+	void GPSRegistration(std::string fold);
+
+	void GPSRegistration2(std::string fold);
 
 	// 
 	void SaveModel();
@@ -82,7 +89,9 @@ public:
 
 	void GetAccuracy(std::string file, std::vector<CameraModel*> cam_models, std::vector<Camera*> cams, std::vector<Point3D*> pts);
 
-	void AbsoluteOrientationWithGPS();
+	void AbsoluteOrientationWithGPSGlobal();
+
+	void AbsoluteOrientationWithGPSLocal(int range, std::vector<Eigen::Matrix3d> &Rs_local, std::vector<Eigen::Vector3d> &ts_local);
 
 	// 
 	void DrawPts(std::vector<int> img_ids, std::string fold);
@@ -100,6 +109,12 @@ public:
 		std::vector<std::vector<cv::Mat>> &Hs);
 
 	void WriteGPSPose(std::string file);
+
+	void WriteOffset(std::string file);
+
+	void Convert2GPS(std::string fold);
+
+	void Convert2GPSDense(std::string fold);
 
 private:
 	BundleAdjustOptions bundle_full_options_;
@@ -120,6 +135,7 @@ private:
 	double th_outlier, resize_ratio;
 	std::string fold_image_;
 	Eigen::Vector3d gps_offset_;
+	bool use_slam_pt_;
 };
 
 }  // namespace objectsfm
