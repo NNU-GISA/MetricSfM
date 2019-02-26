@@ -31,8 +31,8 @@
 #include <omp.h>
 
 #include "utils/basic_funcs.h"
-#include "graph/initial_matching_graph.h"
-#include "graph/fine_matching_graph.h"
+
+#include "graph/matching_graph_via_combined.h"
 
 namespace objectsfm {
 
@@ -51,36 +51,23 @@ namespace objectsfm {
 
 	bool Graph::BuildGraph()
 	{
-		// build initial graph
-		std::cout << "Building initial graph ..." << std::endl;
-		InitialMatchingGraph init_graph;
-		init_graph.options_.matching_type = options_.matching_type;
-		init_graph.options_.priori_type = options_.priori_type;
-		init_graph.options_.priori_file = options_.priori_file;
-		init_graph.AssociateDatabase(db_);
-		init_graph.BuildInitialMatchGraph();
-
-		// build fine graph
-		std::cout << "Building fine graph ..." << std::endl;
-		FineMatchingGraph fine_graph;
-		fine_graph.AssociateDatabase(db_);
-		fine_graph.BuildMatchGraph(init_graph.match_graph_init);
-
+		MatchingGraphViaCombined grapher;
+		grapher.options_.use_gpu = options_.use_gpu;
+		grapher.AssociateDatabase(db_);
+		grapher.BuildMatchGraph(options_.all_match);
 		return true;
 	}
 
 	void Graph::ReadinMatchingGraph()
 	{
-		std::string path = db_->output_fold_ + "//" + "graph_matching.txt";
+		std::string path = db_->output_fold_ + "//" + "graph_matching";
 		std::ifstream ifs(path, std::ios::binary);
-		if (!ifs.is_open()) {
+		if (!ifs.is_open())
+		{
 			return;
 		}
 		match_graph_ = new int[db_->num_imgs_*db_->num_imgs_];
-
-		for (size_t i = 0; i < db_->num_imgs_*db_->num_imgs_; i++) {
-			ifs >> match_graph_[i];
-		}
+		ifs.read((char*)match_graph_, db_->num_imgs_*db_->num_imgs_ * sizeof(int));
 		ifs.close();
 	}
 

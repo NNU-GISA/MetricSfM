@@ -190,12 +190,6 @@ namespace objectsfm
 		void keep_unique_idx_vector(std::vector<int> &data, std::vector<int> &unique_idx);
 
 		float vector_dot_float(float* ptr1, float* ptr2, int n);
-
-		std::vector<int> vector_subtract(int num, std::vector<int> data2);
-
-		void vector_avg_denoise(std::vector<float> &data, int &count, float &result);
-
-		void same_in_vectors(std::vector<int> &v1, std::vector<int> &v2, std::vector<int> &vsame);
 	}
 
 	namespace rotation 
@@ -214,8 +208,6 @@ namespace objectsfm
 
 		// R = Rz*Ry*Rx
 		void EulerAnglesToRotationMatrix(double rx, double ry, double rz, Eigen::Matrix3d &R); 
-
-		void RotationMatrixToEulerAngles(Eigen::Matrix3d R, double &rx, double &ry, double &rz);
 	}
 
 	namespace memory

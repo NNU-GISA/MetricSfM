@@ -48,8 +48,6 @@ public:
 
 	void SetACPose(Eigen::Vector3d a, Eigen::Vector3d c);
 
-	void Transformation(Eigen::Matrix3d R, Eigen::Vector3d t, double scale);
-
 	void UpdateDataFromPose();
 
 	void UpdatePoseFromData();
@@ -72,11 +70,11 @@ public:
 	int id_;
 	int id_img_;
 	bool is_mutable_;
-	CameraModel *cam_model_ = NULL;
+	CameraModel *cam_model_;
 
 	RTPose pos_rt_;
 	ACPose pos_ac_;
-	double data[6]; // for bundle adjustment, [0,1,2] are the angle-axis, [3,4,5] are the c = -R.inv()*t.
+	double data[6]; // for bundle adjustment, [0,1,2] are the angle-axis, [3,4,5] are the translation t.
 
 	Eigen::Matrix<double, 3, 3> K;
 	Eigen::Matrix<double, 3, 4> M, P;

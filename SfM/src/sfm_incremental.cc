@@ -49,8 +49,7 @@ namespace objectsfm {
 		db_.input_fold_ = options_.input_fold;
 		db_.output_fold_ = options_.output_fold;
 		db_.options.feature_type = options_.feature_type;
-		db_.options.resize = options_.resize;
-		db_.options.image_size = options_.image_size;
+		db_.options.resize_image = options_.resize_image;
 		db_.options.feature_type = options_.feature_type;
 		if (!db_.FeatureExtraction())
 		{
@@ -60,7 +59,7 @@ namespace objectsfm {
 		localize_fail_times_ = std::vector<int>(db_.num_imgs_, 0);
 
 		// graph
-		graph_.options_.matching_type = options_.matching_type;
+		graph_.options_.all_match = options_.all_match;
 		graph_.options_.use_bow = options_.use_bow;
 		graph_.options_.th_sim = options_.th_sim;
 		graph_.options_.matching_graph_algorithm = options_.matching_graph_algorithm;
@@ -85,6 +84,13 @@ namespace objectsfm {
 
 		// load matching graph
 		graph_.ReadinMatchingGraph();
+		for (size_t i = 0; i < db_.num_imgs_; i++)
+		{
+			for (size_t j = 0; j < db_.num_imgs_; j++)
+			{
+				std::cout << graph_.match_graph_[i*db_.num_imgs_ + j] << " ";
+			}
+		}
 
 		// Try to add as many views as possible to the reconstruction until no more views can be localized.
 		while (true)
@@ -210,7 +216,6 @@ namespace objectsfm {
 		{
 			int id_img1 = seed_pair_hyps[i].first;
 			int id_img2 = seed_pair_hyps[i].second;
-			std::cout << id_img1 << " " << id_img2 << std::endl;
 
 			//id_img1 = 142; // 16, 17    7 8    124 317
 			//id_img2 = 143; // 52, 53
@@ -308,6 +313,9 @@ namespace objectsfm {
 			// draw
 			cv::Mat image1 = cv::imread(db_.image_paths_[id_img1]);
 			cv::Mat image2 = cv::imread(db_.image_paths_[id_img2]);
+			int pitch = 128;
+			cv::resize(image1, image1, cv::Size((image1.cols / pitch + 1) * pitch, (image1.rows / pitch + 1) * pitch));
+			cv::resize(image2, image2, cv::Size((image2.cols / pitch + 1) * pitch, (image2.rows / pitch + 1) * pitch));
 
 			// initial 3D structure via triangulation
 			for (size_t j = 0; j < matches.size(); j++)

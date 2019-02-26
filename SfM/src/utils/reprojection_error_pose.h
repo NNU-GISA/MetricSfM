@@ -33,13 +33,17 @@ namespace objectsfm
 			T* residuals) const
 		{
 			// pose[0,1,2] are the angle-axis rotation.
-			T xyz_temp[3];
-			xyz_temp[0] = T(point[0]) - pose[3];
-			xyz_temp[1] = T(point[1]) - pose[4];
-			xyz_temp[2] = T(point[2]) - pose[5];
+			T point_T[3], p[3];
+			for (size_t i = 0; i < 3; i++)
+			{
+				point_T[i] = T(point[i]);
+			}
+			ceres::AngleAxisRotatePoint(pose, point_T, p);
 
-			T p[3];
-			ceres::AngleAxisRotatePoint(pose, xyz_temp, p);
+			// pose[3,4,5] are the translation.
+			p[0] += pose[3];
+			p[1] += pose[4];
+			p[2] += pose[5];
 
 			// Compute the center of distortion
 			const T xp = p[0] / p[2];

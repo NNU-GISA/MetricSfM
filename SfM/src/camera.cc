@@ -76,16 +76,6 @@ void Camera::SetACPose(Eigen::Vector3d a, Eigen::Vector3d c)
 	UpdateDataFromPose();
 }
 
-void Camera::Transformation(Eigen::Matrix3d R, Eigen::Vector3d t, double scale)
-{
-	pos_rt_.R = pos_rt_.R * R.inverse();
-	pos_ac_.c = scale * R * pos_ac_.c + t;
-	pos_rt_.t = -pos_rt_.R * pos_ac_.c;
-	rotation::RotationMatrixToAngleAxis(pos_rt_.R, pos_ac_.a);
-	
-	UpdateDataFromPose();
-}
-
 void Camera::UpdateDataFromPose()
 {
 	// pose angle aixs
@@ -93,17 +83,13 @@ void Camera::UpdateDataFromPose()
 	data[1] = pos_ac_.a[1];
 	data[2] = pos_ac_.a[2];
 
-	// camera c
-	data[3] = pos_ac_.c[0];
-	data[4] = pos_ac_.c[1];
-	data[5] = pos_ac_.c[2];
+	// camera t
+	data[3] = pos_rt_.t[0];
+	data[4] = pos_rt_.t[1];
+	data[5] = pos_rt_.t[2];
 
 	// the intrinsic matrix
-	if (cam_model_ != NULL)
-	{
-		K = Eigen::DiagonalMatrix<double, 3>(cam_model_->f_, cam_model_->f_, 1.0);
-	}
-	
+	K = Eigen::DiagonalMatrix<double, 3>(cam_model_->f_, cam_model_->f_, 1.0);
 
 	// the convertion matrix, from Xw to Xc
 	M << pos_rt_.R(0, 0), pos_rt_.R(0, 1), pos_rt_.R(0, 2), pos_rt_.t(0),
@@ -123,10 +109,10 @@ void Camera::UpdatePoseFromData()
 	rotation::AngleAxisToRotationMatrix(pos_ac_.a, pos_rt_.R);
 
 	// camera t
-	pos_ac_.c[0] = data[3];
-	pos_ac_.c[1] = data[4];
-	pos_ac_.c[2] = data[5];
-	pos_rt_.t = -pos_rt_.R * pos_ac_.c;
+	pos_rt_.t[0] = data[3];
+	pos_rt_.t[1] = data[4];
+	pos_rt_.t[2] = data[5];
+	pos_ac_.c = -pos_rt_.R.inverse() * pos_rt_.t;
 
 	// the intrinsic matrix
 	K = Eigen::DiagonalMatrix<double, 3>(cam_model_->f_, cam_model_->f_, 1.0);

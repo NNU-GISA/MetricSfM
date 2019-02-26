@@ -19,8 +19,8 @@
 
 #include <vector>
 
-#include <opencv2\opencv.hpp>   
-#include <opencv2\highgui\highgui.hpp>
+#include <opencv2/opencv.hpp>   
+#include <opencv2/highgui/highgui.hpp>
 
 #include "database.h"
 #include "basic_structs.h"

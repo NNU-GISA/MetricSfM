@@ -56,21 +56,13 @@ namespace objectsfm
 			f_hyp_ = MAX_(w, h)*1.2;
 			w_ = w, h_ = h;
 			px_ = w_/2.0, py_ = h_/2.0;
-			k1_ = 0.0, k2_ = 0.0, dcx_ = 0.0, dcy_ = 0.0;
+			k1_ = 0.0, k2_ = 0.0;
 			id_ = id;
 			cam_maker_ = cam_maker;
 			cam_model_ = cam_model;
 			num_cams_ = 0;
 			is_mutable_ = true;
 
-			UpdateDataFromModel();
-		}
-
-		void SetIntrisicParas(double f, double px, double py)
-		{
-			f_ = f;
-			px_ = px;
-			py_ = py;
 			UpdateDataFromModel();
 		}
 
@@ -85,8 +77,6 @@ namespace objectsfm
 			data[0] = f_;
 			data[1] = k1_;
 			data[2] = k2_;
-			data[3] = dcx_;
-			data[4] = dcy_;
 		}
 
 		void UpdataModelFromData()
@@ -94,11 +84,6 @@ namespace objectsfm
 			f_  = data[0];
 			k1_ = data[1];
 			k2_ = data[2];
-			dcx_ = data[3];
-			dcy_ = data[4];
-
-			px_ += dcx_;
-			py_ += dcy_;
 		}
 
 		void AddCamera(int idx)
@@ -116,8 +101,8 @@ namespace objectsfm
 		std::string cam_maker_, cam_model_;
 		int w_, h_;       // cols and rows
 		double f_mm_, f_, f_hyp_, px_, py_;  // focal length and principle point
-		double k1_, k2_, dcx_, dcy_;   // distrotion paremeters
-		double data[5];    // for bundle adjustment, {f_, k1_, k2_, dcx_, dcy_}, respectively
+		double k1_, k2_;   // distrotion paremeters
+		double data[3];    // for bundle adjustment, [0,1,2] are f_, k1_ and k2_, respectively
 		int num_cams_;
 		std::vector<int> idx_cams_;
 		bool is_mutable_;
@@ -152,9 +137,8 @@ namespace objectsfm
 
 		// data base
 		int num_image_voc = 500;
-		bool resize = false;
-		int image_size = 2000*1500;
-		std::string feature_type = "CUDASIFT"; // VLSIFT CUDASIFT CUDAASIFT
+		int resize_image = 2000;
+		std::string feature_type = "VLSIFT"; // SIFT, SURF or VLSIFT
 
 		// graph
 		std::string matching_graph_algorithm = "FeatureDescriptor"; // BoWSimilarity InvertedFile WordMatching
@@ -162,6 +146,7 @@ namespace objectsfm
 		bool use_bow = false;
 		bool use_gpu = false;
 		float th_sim = 0.01;
+		bool all_match = false;
 
 		// 
 		bool use_same_camera = false;
@@ -173,7 +158,7 @@ namespace objectsfm
 		// localization
 		int th_seedpair_structures = 20;
 		int th_max_new_add_pts = 200;
-		int th_max_failure_localization = 20;
+		int th_max_failure_localization = 5;
 		int th_min_2d3d_corres = 20;
 
 		// bundle
@@ -189,14 +174,40 @@ namespace objectsfm
 
 		double th_angle_small = 3.0 / 180.0*3.1415;
 		double th_angle_large = 5.0 / 180.0*3.1415;
-
-		// matching graph
-		std::string matching_type = "priori";
-		std::string priori_type = "llt";
-		std::string priori_file;
 	};
 
-	
+	//
+	struct MonocularVOOptions
+	{
+		// 
+		std::string input_fold;
+		std::string output_fold;
+
+		int resize_image = 1000;
+
+		int num_frames_skip = 0;
+		double th_ratio_track_seed = 0.7;
+		double th_ratio_track_grow = 0.6;
+
+		// outliers
+		double th_mse_localization = 5.0;
+		double th_mse_reprojection = 5.0;
+		double th_mse_outliers = 1.0;
+
+		double th_angle_small = 1.0 / 180.0*3.1415;
+		double th_angle_large = 3.0 / 180.0*3.1415;
+
+		// bundle
+		bool minimizer_progress_to_stdout = false;
+		int th_max_iteration_full_bundle = 100;
+		int th_max_iteration_partial_bundle = 100;
+		int th_step_full_bundle_adjustment = 5;
+
+		// id_pt_global = id_pt_image + id_image * label_max_per_image
+		// to generat the global index of the keypoint on each image
+		int idx_max_per_image = 1000000;
+	};
+
 	//
 	struct DatabaseOptions
 	{
@@ -204,11 +215,9 @@ namespace objectsfm
 		int num_image_voc = 500;
 		int fbow_k = 10;  // number of children for each node
 		int fbow_l = 6;     // number of levels of the voc-tree
-
-		float image_size = 2000*1500;
+		float resize_image = 1600*1200;
 		std::string feature_type = "VLSIFT"; // SIFT, SURF or VLSIFT
 		bool extract_gist = false;
-		bool resize = false;
 	};
 
 	//
@@ -218,13 +227,8 @@ namespace objectsfm
 		bool use_bow = false;
 		bool use_gpu = false;
 		float th_sim = 0.01;
+		float all_match = false;
 		std::string sim_graph_type = "WordNumber";  // BoWDistance WordNumber
-		std::string matching_type = "feature"; // feature  all
-		std::string priori_type = "llt"; // llt xyz xy order
-		std::string priori_file;
-		int ellipsoid_id_ = 23; // WGS-84
-		std::string zone_id_ = "17N";
-		int knn = 50;
 	};
 
 	// 
@@ -234,14 +238,6 @@ namespace objectsfm
 		bool minimizer_progress_to_stdout = true;
 		int num_threads = 1;
 	};
-
-	//
-	struct DenseOptions
-	{
-		int disp_size = 128;
-		float uniqueness = 0.96;
-	};
-
 
 	//
 	struct ListKeyPoint

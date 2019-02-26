@@ -36,15 +36,14 @@ namespace objectsfm
 			const T* const xyz,
 			T* residuals) const
 		{
-			// pose[0,1,2] are the angle-axis rotation, pose[3,4,5] are the camera center
-			// Xc = R (Xw-c)
-			T xyz_temp[3];
-			xyz_temp[0] = xyz[0] - pose[3];
-			xyz_temp[1] = xyz[1] - pose[4];
-			xyz_temp[2] = xyz[2] - pose[5];
-
+			// pose[0,1,2] are the angle-axis rotation.
 			T p[3];
-			ceres::AngleAxisRotatePoint(pose, xyz_temp, p);
+			ceres::AngleAxisRotatePoint(pose, xyz, p);
+
+			// pose[3,4,5] are the translation.
+			p[0] += pose[3];
+			p[1] += pose[4];
+			p[2] += pose[5];
 
 			// Compute the center of distortion. The sign change comes from
 			// the camera model that Noah Snavely's Bundler assumes, whereby
@@ -54,17 +53,14 @@ namespace objectsfm
 
 			// Apply second and fourth order radial distortion.
 			const T& focal = cam[0];
-			const T& k1 = cam[1];
-			const T& k2 = cam[2];
-			const T& d_cx = cam[3];
-			const T& d_cy = cam[4];
-
+			const T& l1 = cam[1];
+			const T& l2 = cam[2];
 			const T r2 = xp*xp + yp*yp;
-			const T distortion = 1.0 + r2 * (k1 + k2 * r2);
+			const T distortion = 1.0 + r2  * (l1 + l2  * r2);
 
 			// Compute final projected point position.
-			const T predicted_x = focal * distortion * xp + d_cx;
-			const T predicted_y = focal * distortion * yp + d_cy;
+			const T predicted_x = focal * distortion * xp;
+			const T predicted_y = focal * distortion * yp;
 
 			// The error is the difference between the predicted and observed position.
 			residuals[0] = weight*(predicted_x - observed_x);
@@ -77,7 +73,7 @@ namespace objectsfm
 		// the client code.
 		static ceres::CostFunction* Create(const double observed_x, const double observed_y, const double weight)
 		{
-			return (new ceres::AutoDiffCostFunction<ReprojectionErrorPoseCamXYZ, 2, 6, 5, 3>(
+			return (new ceres::AutoDiffCostFunction<ReprojectionErrorPoseCamXYZ, 2, 6, 3, 3>(
 				new ReprojectionErrorPoseCamXYZ(observed_x, observed_y, weight)));
 		}
 
