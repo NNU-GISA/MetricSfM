@@ -55,7 +55,7 @@ namespace objectsfm {
 		if (options_.matching_type == "all")
 		{
 			for (size_t i = 0; i < num_imgs_; i++) {
-				for (size_t j = 0; j < num_imgs_; j++) {
+				for (size_t j = 0; j < num_imgs_; j++) {					
 					if (j != i) {
 						match_graph_init[i].push_back(j);
 					}

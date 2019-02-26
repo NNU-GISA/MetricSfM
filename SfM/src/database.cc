@@ -30,7 +30,6 @@
 #include "utils/find_polynomial_roots_companion_matrix.h"
 
 #include "feature/feature_extractor_vl_sift.h"
-#include "feature/feature_extractor_opencv.h"
 #include "feature/feature_extractor_cuda_sift.h"
 
 
@@ -289,42 +288,25 @@ void Database::ExtractImageFeatures(int idx)
 	// read in image data
 	cv::Mat img = cv::imread(image_paths_[idx], 0);
 	float img_size = img.cols*img.rows;
-	int pitch = 128;
-	float ratio = 0.0;
-	cv::Size resize;
+	float ratio = 1.0;
 	if (options.resize)
 	{
-		if (options.resize_image / img_size >= 0.8)
-		{
-			resize.width = (img.cols / pitch + 1) * pitch;
-		}
-		else
-		{
-			resize.width = 1664;
-		}
-		ratio = float(resize.width) / img.cols;
-		resize.height = int(ratio*img.rows);
-		cv::resize(img, img, resize);
+		ratio = float(img_size) / options.image_size;
+		ratio = std::sqrt(ratio);
+		int width = (int(ratio*img.cols) / 10) * 10;
+		ratio = float(width) / img.cols;
+		cv::resize(img, img, cv::Size(int(img.cols*ratio), int(img.rows*ratio)));
 	}
 	
 	image_infos_[idx]->cols = img.cols;
 	image_infos_[idx]->rows = img.rows;
-	//image_infos_[idx]->f_pixel *= ratio;
 	image_infos_[idx]->f_pixel = 0.0;
 	image_infos_[idx]->zoom_ratio = ratio;
 
 	// extract feature
 	keypoints_[idx] = new ListKeyPoint;
 	descriptors_[idx] = new cv::Mat;
-	if (options.feature_type == "SIFT")
-	{
-		FeatureExtractorOpenCV::Run(img, "SIFT", keypoints_[idx], descriptors_[idx]);
-	}
-	else if (options.feature_type == "SURF")
-	{
-		FeatureExtractorOpenCV::Run(img, "SURF", keypoints_[idx], descriptors_[idx]);
-	}
-	else if (options.feature_type == "VLSIFT")
+	if (options.feature_type == "VLSIFT")
 	{
 		VLSiftExtractor vlsift;
 		vlsift.Run(img, keypoints_[idx], descriptors_[idx]);

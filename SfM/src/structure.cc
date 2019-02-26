@@ -24,7 +24,6 @@
 
 #include "camera.h"
 #include "utils/basic_funcs.h"
-#include "utils/calibration.h"
 
 namespace objectsfm {
 
@@ -35,8 +34,6 @@ Point3D::Point3D()
 	is_mutable_ = true;
 	is_bad_estimated_ = false;
 	is_new_added_ = true;
-
-	data = new double[3];
 }
 
 Point3D::~Point3D()
@@ -49,18 +46,14 @@ void Point3D::Trianglate(Camera * cam1, Eigen::Vector2d pt1, Camera * cam2, Eige
 	std::vector<Eigen::Vector3d> ray_directions;
 
 	Eigen::Vector3d origin1 = cam1->pos_ac_.c;
-	Eigen::Vector2d pt1_undistorted;
-	Calibration::UndistortedPts(pt1, pt1_undistorted, cam1->cam_model_);
-	Eigen::Vector3d dir_c1(pt1_undistorted(0), pt1_undistorted(1), cam1->cam_model_->f_);
+	Eigen::Vector3d dir_c1(pt1(0), pt1(1), cam1->cam_model_->f_);
 	Eigen::Vector3d dir_w1 = cam1->pos_rt_.R.transpose()*dir_c1;
 	dir_w1.normalize();
 	ray_origins.push_back(origin1);
 	ray_directions.push_back(dir_w1);
 
 	Eigen::Vector3d origin2 = cam2->pos_ac_.c;
-	Eigen::Vector2d pt2_undistorted;
-	Calibration::UndistortedPts(pt2, pt2_undistorted, cam2->cam_model_);
-	Eigen::Vector3d dir_c2(pt2_undistorted(0), pt2_undistorted(1), cam2->cam_model_->f_);
+	Eigen::Vector3d dir_c2(pt2(0), pt2(1), cam2->cam_model_->f_);
 	Eigen::Vector3d dir_w2 = cam2->pos_rt_.R.transpose()*dir_c2;
 	dir_w2.normalize();
 	ray_origins.push_back(origin2);
@@ -183,15 +176,10 @@ bool Point3D::Trianglate(double th_error, double th_angle)
 	int i = 0;
 	while (iter_cams != cams_.end())
 	{
-		// undistortion
-		Eigen::Vector2d pt_undistorted;
-		Calibration::UndistortedPts(iter_pts->second, pt_undistorted, iter_cams->second->cam_model_);
-
-		//
 		A.block<1, 4>(2 * i + 0, 0) = -iter_cams->second->M.row(1)* iter_cams->second->cam_model_->f_
-			+ iter_cams->second->M.row(2)*pt_undistorted[1];
-		A.block<1, 4>(2 * i + 1, 0) = iter_cams->second->M.row(0)* iter_cams->second->cam_model_->f_
-			- iter_cams->second->M.row(2)*pt_undistorted[0];
+			+ iter_cams->second->M.row(2)*iter_pts->second(1);
+		A.block<1, 4>(2 * i + 1, 0) =  iter_cams->second->M.row(0)* iter_cams->second->cam_model_->f_
+			- iter_cams->second->M.row(2)*iter_pts->second(0);
 		iter_cams++;
 		iter_pts++;
 		i++;
@@ -229,14 +217,9 @@ bool Point3D::Trianglate2(double th_error, double th_angle)
 	std::map<int, Eigen::Vector2d>::iterator iter_pts = pts2d_.begin();
 	while (iter_cams != cams_.end())
 	{
-		// undistortion
-		Eigen::Vector2d pt_undistorted;
-		Calibration::UndistortedPts(iter_pts->second, pt_undistorted, iter_cams->second->cam_model_);
-
-		//
-		Eigen::Vector3d dir_c(pt_undistorted[0], pt_undistorted[1], iter_cams->second->cam_model_->f_);
-		Eigen::Vector3d dir_w = iter_cams->second->pos_rt_.R.transpose()*dir_c;
 		Eigen::Vector3d origin = iter_cams->second->pos_ac_.c;
+		Eigen::Vector3d dir_c(iter_pts->second(0), iter_pts->second(1), iter_cams->second->cam_model_->f_);
+		Eigen::Vector3d dir_w = iter_cams->second->pos_rt_.R.transpose()*dir_c;
 		dir_w.normalize();
 
 		ray_origins.push_back(origin);
@@ -374,44 +357,6 @@ bool Point3D::SufficientTriangulationAngle(double th_angle_triangulation)
 void Point3D::SetMutable(bool is_mutable)
 {
 	is_mutable_ = is_mutable;
-}
-
-void Point3D::ReleaseAll()
-{
-	for (std::map<int, Camera*>::iterator iter = cams_.begin(); iter != cams_.end(); iter++)
-	{
-		cams_.erase(iter);
-	}
-	for (std::map<int, Eigen::Vector2d>::iterator iter = pts2d_.begin(); iter != pts2d_.end(); iter++)
-	{
-		pts2d_.erase(iter);
-	}
-}
-
-void Point3D::UpdateFromData()
-{
-	std::map<int, Camera*>::iterator iter_cams = cams_.begin();
-	std::map<int, Eigen::Vector2d>::iterator iter_pts = pts2d_.begin();
-	while (iter_cams != cams_.end())
-	{
-		// undistortion
-		Eigen::Vector2d pt_undistorted;
-		Calibration::UndistortedPts(iter_pts->second, pt_undistorted, iter_cams->second->cam_model_);
-		iter_pts->second = pt_undistorted;
-
-		iter_cams++;
-		iter_pts++;
-	}
-}
-
-void Point3D::Transformation(Eigen::Matrix3d R, Eigen::Vector3d t, double scale)
-{
-	Eigen::Vector3d pt(data[0], data[1], data[2]);
-	pt = scale * R * pt + t;
-
-	data[0] = pt[0];
-	data[1] = pt[1];
-	data[2] = pt[2];
 }
 
 }  // namespace objectsfm

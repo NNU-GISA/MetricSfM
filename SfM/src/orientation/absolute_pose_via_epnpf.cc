@@ -51,9 +51,7 @@ namespace objectsfm {
 
 			AbsolutePoseEPNP epnp;
 			double error_i = 0.0;
-			//epnp.EPNPRansac(pts_w, pts_2d, f_i, num_pts_per_iter, max_iter, pose_absolute_i, error_i);
-			epnp.EPNP(pts_w, pts_2d, f_i, pose_absolute_i, error_i);
-			//epnp.EPNPRobust(pts_w, pts_2d, f_i, pose_absolute_i, error_i);
+			epnp.EPNPRansac(pts_w, pts_2d, f_i, max_iter, pose_absolute_i, error_i);
 
 			if (error_i < error)
 			{

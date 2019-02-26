@@ -152,7 +152,8 @@ namespace objectsfm
 
 		// data base
 		int num_image_voc = 500;
-		int resize_image = 2000;
+		bool resize = false;
+		int image_size = 2000*1500;
 		std::string feature_type = "CUDASIFT"; // VLSIFT CUDASIFT CUDAASIFT
 
 		// graph
@@ -161,7 +162,6 @@ namespace objectsfm
 		bool use_bow = false;
 		bool use_gpu = false;
 		float th_sim = 0.01;
-		bool all_match = false;
 
 		// 
 		bool use_same_camera = false;
@@ -187,8 +187,8 @@ namespace objectsfm
 		double th_mse_reprojection = 3.0;
 		double th_mse_outliers = 1.0;
 
-		double th_angle_small = 5.0 / 180.0*3.1415;
-		double th_angle_large = 7.0 / 180.0*3.1415;
+		double th_angle_small = 3.0 / 180.0*3.1415;
+		double th_angle_large = 5.0 / 180.0*3.1415;
 
 		// matching graph
 		std::string matching_type = "priori";
@@ -196,38 +196,7 @@ namespace objectsfm
 		std::string priori_file;
 	};
 
-	//
-	struct MonocularVOOptions
-	{
-		// 
-		std::string input_fold;
-		std::string output_fold;
-
-		int resize_image = 1000;
-
-		int num_frames_skip = 0;
-		double th_ratio_track_seed = 0.7;
-		double th_ratio_track_grow = 0.6;
-
-		// outliers
-		double th_mse_localization = 5.0;
-		double th_mse_reprojection = 5.0;
-		double th_mse_outliers = 1.0;
-
-		double th_angle_small = 1.0 / 180.0*3.1415;
-		double th_angle_large = 3.0 / 180.0*3.1415;
-
-		// bundle
-		bool minimizer_progress_to_stdout = false;
-		int th_max_iteration_full_bundle = 100;
-		int th_max_iteration_partial_bundle = 100;
-		int th_step_full_bundle_adjustment = 5;
-
-		// id_pt_global = id_pt_image + id_image * label_max_per_image
-		// to generat the global index of the keypoint on each image
-		int idx_max_per_image = 1000000;
-	};
-
+	
 	//
 	struct DatabaseOptions
 	{
@@ -235,7 +204,8 @@ namespace objectsfm
 		int num_image_voc = 500;
 		int fbow_k = 10;  // number of children for each node
 		int fbow_l = 6;     // number of levels of the voc-tree
-		float resize_image = 1600*1200;
+
+		float image_size = 2000*1500;
 		std::string feature_type = "VLSIFT"; // SIFT, SURF or VLSIFT
 		bool extract_gist = false;
 		bool resize = false;
@@ -249,7 +219,7 @@ namespace objectsfm
 		bool use_gpu = false;
 		float th_sim = 0.01;
 		std::string sim_graph_type = "WordNumber";  // BoWDistance WordNumber
-		std::string matching_type = "priori"; // Via_Feature  Via_Priori
+		std::string matching_type = "feature"; // feature  all
 		std::string priori_type = "llt"; // llt xyz xy order
 		std::string priori_file;
 		int ellipsoid_id_ = 23; // WGS-84

@@ -20,83 +20,46 @@
 #include "orientation/absolute_pose_via_epnp.h"
 #include "orientation/absolute_pose_via_p4pf.h"
 
-#include "utils/calibration.h"
+#ifndef MIN_
+#define MIN_(a,b) ( ((a)<(b)) ? (a):(b) )
+#endif // !MIN
 
 namespace objectsfm {
 	bool AbsolutePoseEstimation::AbsolutePoseWithoutFocalLength(std::vector<Eigen::Vector3d>& pts_w, 
-		std::vector<Eigen::Vector2d>& pts_2d, CameraModel *cam_model, RTPose & pose_absolute, std::vector<double> &errors, double &avg_error, double th_error)
+		std::vector<Eigen::Vector2d>& pts_2d, double & f, RTPose & pose_absolute, std::vector<double> &errors, double &avg_error)
 	{
-		// get undistorted pts
-		std::vector<Eigen::Vector2d> pts_2d_undistorted;
-		Calibration::UndistortedPts(pts_2d, pts_2d_undistorted, cam_model);
-
-		// pnp
-		double f_ratio_min = 0.25;
+		double f_ratio_min = 0.5;
 		double f_ratio_max = 4.00;
 		double error = 0.0;
-		double f_estimated = MAX_(cam_model->h_, cam_model->w_)*1.2;
-		AbsolutePoseEPNPF::EPNPF(pts_w, pts_2d_undistorted, f_estimated, f_ratio_min, f_ratio_max, pose_absolute, error);
-		Error(pts_w, pts_2d_undistorted, f_estimated, pose_absolute, errors, error);
+		AbsolutePoseEPNPF::EPNPF(pts_w, pts_2d, f, f_ratio_min, f_ratio_max, pose_absolute, error);
+		Error(pts_w, pts_2d, f, pose_absolute, errors, error);
+
 		avg_error = error;
-		if (avg_error > th_error) {
-			return false;
-		}
-
-		//
-		int n_inliers = 0;
-		for (size_t i = 0; i < errors.size(); i++) {
-			if (errors[i] < th_error) {
-				n_inliers++;
-			}
-		}
-		if (n_inliers < pts_w.size() / 3 || n_inliers < 12) {
-			return false;
-		}
-
-		cam_model->SetFocalLength(f_estimated);
 
 		return true;
 	}
 
 	bool AbsolutePoseEstimation::AbsolutePoseWithFocalLength(std::vector<Eigen::Vector3d>& pts_w, 
-		std::vector<Eigen::Vector2d>& pts_2d, CameraModel *cam_model, RTPose & pose_absolute, std::vector<double> &errors, double &avg_error, double th_error)
+		std::vector<Eigen::Vector2d>& pts_2d, double f, RTPose & pose_absolute, std::vector<double> &errors, double &avg_error)
 	{
-		// get undistorted pts
-		std::vector<Eigen::Vector2d> pts_2d_undistorted;
-		Calibration::UndistortedPts(pts_2d, pts_2d_undistorted, cam_model);
-
-
 		int num_pts_per_iter = 5;
 		int max_iter = 100;
 		double error = 0.0;
 
 		AbsolutePoseEPNP epnp;
-		epnp.EPNP(pts_w, pts_2d, cam_model->f_, pose_absolute, error);
+		epnp.EPNPRansac(pts_w, pts_2d, f, max_iter, pose_absolute, error);
 
 		// calculate error
-		Error(pts_w, pts_2d, cam_model->f_, pose_absolute, errors, error);
-		avg_error = error;
-		if (avg_error > th_error) {
-			return false;
-		}
+		Error(pts_w, pts_2d, f, pose_absolute, errors, error);
 
-		//
-		int n_inliers = 0;
-		for (size_t i = 0; i < errors.size(); i++) {
-			if (errors[i] < th_error) {
-				n_inliers++;
-			}
-		}
-		if (n_inliers < pts_w.size() / 3 || n_inliers < 12) {
-			return false;
-		}
+		avg_error = error;
 
 		return true;
 	}
 
 	bool AbsolutePoseEstimation::AbsolutePoseWithRotation(std::vector<Eigen::Vector3d>& pts_w, 
 		std::vector<Eigen::Vector2d>& pts_2d, Eigen::Matrix3d R, double & f, RTPose & pose_absolute, 
-		std::vector<double> &errors, double &avg_error, double th_error)
+		std::vector<double> &errors, double &avg_error)
 	{
 		return false;
 	}

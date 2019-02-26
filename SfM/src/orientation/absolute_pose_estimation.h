@@ -32,15 +32,15 @@ namespace objectsfm {
 
 		// estimate absolute pose without focal length via UP3P algorithm
 		static bool AbsolutePoseWithoutFocalLength(std::vector<Eigen::Vector3d> &pts_w, std::vector<Eigen::Vector2d> &pts_2d,
-			CameraModel *cam_model, RTPose &pose_absolute, std::vector<double> &errors, double &avg_error, double th_error);
+			double &f, RTPose &pose_absolute, std::vector<double> &errors, double &avg_error);
 
 		// estimate absolute pose with known focal length via EP3P algorithm
 		static bool AbsolutePoseWithFocalLength(std::vector<Eigen::Vector3d> &pts_w, std::vector<Eigen::Vector2d> &pts_2d,
-			CameraModel *cam_model, RTPose &pose_absolute, std::vector<double> &errors, double &avg_error, double th_error);
+			double f, RTPose &pose_absolute, std::vector<double> &errors, double &avg_error);
 
 		// estimate absolute pose with known R via DLT
 		static bool AbsolutePoseWithRotation(std::vector<Eigen::Vector3d> &pts_w, std::vector<Eigen::Vector2d> &pts_2d,
-			Eigen::Matrix3d R, double &f, RTPose &pose_absolute, std::vector<double> &errors, double &avg_error, double th_error);
+			Eigen::Matrix3d R, double &f, RTPose &pose_absolute, std::vector<double> &errors, double &avg_error);
 
 	private:
 		static void Error(const std::vector<Eigen::Vector3d>& pts_w, const std::vector<Eigen::Vector2d>& pts_2d,

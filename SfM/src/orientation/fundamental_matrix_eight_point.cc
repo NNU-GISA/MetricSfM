@@ -49,18 +49,19 @@ namespace objectsfm {
 		}
 		else
 		{
-			int ransac_times = 20;
+			int ransac_times = 100;
 			for (int i=0; i<ransac_times; ++i)
 			{
+				// get random index
+				std::vector<int> idxs;
+				math::RandVectorN(0, num, 8, idxs);
+
 				std::vector<Eigen::Vector2d> pts1_partial, pts2_partial;
-				for (int j=0; j<num; ++j)
+				for (int j=0; j<idxs.size(); ++j)
 				{
-					if (j%ransac_times == i)
-					{
-						continue;
-					}
-					pts1_partial.push_back(pts1[j]);
-					pts2_partial.push_back(pts2[j]);
+					int idx = idxs[j];
+					pts1_partial.push_back(pts1[idx]);
+					pts2_partial.push_back(pts2[idx]);
 				}
 
 				Eigen::Matrix3d F_hyp;

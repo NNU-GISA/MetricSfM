@@ -28,7 +28,6 @@
 #include <filesystem>
 #include <opencv2/opencv.hpp>
 #include "utils/basic_funcs.h"
-#include "utils/find_polynomial_roots_companion_matrix.h"
 #include "orientation/relative_pose_estimation.h"
 #include "orientation/absolute_pose_estimation.h"
 
@@ -50,9 +49,11 @@ namespace objectsfm {
 		db_.input_fold_ = options_.input_fold;
 		db_.output_fold_ = options_.output_fold;
 		db_.options.feature_type = options_.feature_type;
-		db_.options.resize_image = options_.resize_image;
+		db_.options.resize = options_.resize;
+		db_.options.image_size = options_.image_size;
 		db_.options.feature_type = options_.feature_type;
-		if (!db_.FeatureExtraction()) {
+		if (!db_.FeatureExtraction())
+		{
 			std::cout << "Error with the database" << std::endl;
 		}
 		is_img_processed_ = std::vector<bool>(db_.num_imgs_, false);
@@ -60,10 +61,14 @@ namespace objectsfm {
 
 		// graph
 		graph_.options_.matching_type = options_.matching_type;
-		graph_.options_.priori_type = options_.priori_type;
-		graph_.options_.priori_file = options_.priori_file;
+		graph_.options_.use_bow = options_.use_bow;
+		graph_.options_.th_sim = options_.th_sim;
+		graph_.options_.matching_graph_algorithm = options_.matching_graph_algorithm;
+		graph_.options_.use_gpu = options_.use_gpu;
+		graph_.options_.sim_graph_type = options_.sim_graph_type;
 		graph_.AssociateDatabase(&db_);
-		if (!graph_.BuildGraph()) {
+		if (!graph_.BuildGraph())
+		{
 			std::cout << "Error with the graph" << std::endl;
 		}
 
@@ -113,7 +118,8 @@ namespace objectsfm {
 				std::vector<std::vector<std::pair<int, int>>> corres_2d3d;
 				std::vector<std::vector<int>> visible_cams;
 				FindImageToLocalize(image_ids, corres_2d3d, visible_cams);
-				if (!image_ids.size()) {
+				if (!image_ids.size())
+				{
 					break;
 				}
 				found_seed_ = true;
@@ -149,7 +155,7 @@ namespace objectsfm {
 
 				// do partial bundle adjustment for the added camera and all its visible cameras
 				int idx_new_cam = cams_.size() - 1;
-				//PartialBundleAdjustment(idx_new_cam);
+				PartialBundleAdjustment(idx_new_cam);
 				is_img_processed_[cams_[idx_new_cam]->id_img_] = true;
 				img_cam_map_.insert(std::pair<int, int>(cams_[idx_new_cam]->id_img_, idx_new_cam));
 
@@ -159,9 +165,6 @@ namespace objectsfm {
 				{
 					FullBundleAdjustment();
 				}
-				std::cout << cams_[0]->cam_model_->f_ << std::endl;
-				std::cout << cams_[0]->cam_model_->k1_ << std::endl;
-				std::cout << cams_[0]->cam_model_->k2_ << std::endl;
 
 				// remove new added outliers
 				RemovePointOutliers();
@@ -207,11 +210,10 @@ namespace objectsfm {
 		{
 			int id_img1 = seed_pair_hyps[i].first;
 			int id_img2 = seed_pair_hyps[i].second;
+			std::cout << id_img1 << " " << id_img2 << std::endl;
 
 			//id_img1 = 142; // 16, 17    7 8    124 317
 			//id_img2 = 143; // 52, 53
-
-			std::cout << id_img1 << " " << id_img2 << std::endl;
 
 			// load image features
 			db_.ReadinImageFeatures(id_img1);
@@ -304,11 +306,8 @@ namespace objectsfm {
 			cams_[1]->SetRTPose(cams_[0]->pos_rt_, rt_pose_21);
 
 			// draw
-			//cv::Mat image1 = cv::imread(db_.image_paths_[id_img1]);
-			//cv::Mat image2 = cv::imread(db_.image_paths_[id_img2]);
-			//int pitch = 128;
-			//cv::resize(image1, image1, cv::Size((image1.cols / pitch + 1) * pitch, (image1.rows / pitch + 1) * pitch));
-			//cv::resize(image2, image2, cv::Size((image2.cols / pitch + 1) * pitch, (image2.rows / pitch + 1) * pitch));
+			cv::Mat image1 = cv::imread(db_.image_paths_[id_img1]);
+			cv::Mat image2 = cv::imread(db_.image_paths_[id_img2]);
 
 			// initial 3D structure via triangulation
 			for (size_t j = 0; j < matches.size(); j++)
@@ -330,10 +329,10 @@ namespace objectsfm {
 					db_.keypoints_[id_img2]->pts[id_pt2_local].pt.y,
 					id_pt2_global);
 
-				//cv::Point2f offset1(db_.image_infos_[id_img1]->cols / 2.0, db_.image_infos_[id_img1]->rows / 2.0);
-				//cv::Point2f offset2(db_.image_infos_[id_img2]->cols / 2.0, db_.image_infos_[id_img2]->rows / 2.0);
-				//cv::line(image1, db_.keypoints_[id_img1]->pts[id_pt1_local].pt + offset1,
-				//	db_.keypoints_[id_img2]->pts[id_pt2_local].pt + offset2, cv::Scalar(0,0,255), 1);
+				cv::Point2f offset1(db_.image_infos_[id_img1]->cols / 2.0, db_.image_infos_[id_img1]->rows / 2.0);
+				cv::Point2f offset2(db_.image_infos_[id_img2]->cols / 2.0, db_.image_infos_[id_img2]->rows / 2.0);
+				cv::line(image1, db_.keypoints_[id_img1]->pts[id_pt1_local].pt + offset1,
+					db_.keypoints_[id_img2]->pts[id_pt2_local].pt + offset2, cv::Scalar(0,0,255), 1);
 
 				if (pt_temp->Trianglate2(options_.th_mse_reprojection, options_.th_angle_small))
 				{
@@ -342,7 +341,7 @@ namespace objectsfm {
 					cams_[1]->AddPoints(pt_temp, id_pt2_global);
 				}
 			}
-			//cv::imwrite("F:\\result.jpg", image1);
+			cv::imwrite("F:\\result.jpg", image1);
 
 			db_.ReleaseImageFeatures(id_img1);
 			db_.ReleaseImageFeatures(id_img2);
@@ -358,11 +357,6 @@ namespace objectsfm {
 				cam_models_.clear();
 				continue;
 			}
-
-			cv::Mat img_match;
-			DrawMatch(id_img1, id_img2, img_match);
-			cv::imwrite("F:\\img_match_" + std::to_string(id_img1) + "_" + std::to_string(id_img2) + ".jpg", img_match);
-
 
 			//std::cout << cams_[0]->id_img_ << std::endl;
 			//std::cout << cams_[1]->id_img_ << std::endl;
@@ -546,13 +540,6 @@ namespace objectsfm {
 			return false;
 		}
 
-		//
-		cv::Mat img1, img2;
-		DrawMatch(id_img, 87, img1);
-		DrawMatch(id_img, 88, img2);
-		cv::imwrite("F:\\img1.jpg", img1);
-		cv::imwrite("F:\\img2.jpg", img2);
-
 		// load image data
 		db_.ReadinImageFeatures(id_img);
 
@@ -582,7 +569,6 @@ namespace objectsfm {
 			pts_2d[i] = Eigen::Vector2d(db_.keypoints_[id_img]->pts[idx_2d].pt.x, db_.keypoints_[id_img]->pts[idx_2d].pt.y);
 			pts_w[i] = Eigen::Vector3d(pts_[idx_3d]->data[0], pts_[idx_3d]->data[1], pts_[idx_3d]->data[2]);
 		}
-
 
 		/*
 		// draw
@@ -628,9 +614,9 @@ namespace objectsfm {
 		double avg_error = 0.0;
 		if (cam_new->cam_model_->f_)
 		{
-			bool isOK = AbsolutePoseEstimation::AbsolutePoseWithFocalLength(pts_w, pts_2d,
-				cam_new->cam_model_, pose_absolute, error_reproj, avg_error, options_.th_mse_localization);
-			if (!isOK)
+			AbsolutePoseEstimation::AbsolutePoseWithFocalLength(pts_w, pts_2d,
+				cam_new->cam_model_->f_, pose_absolute, error_reproj, avg_error);
+			if (avg_error > options_.th_mse_localization)
 			{
 				localize_fail_times_[id_img]++;
 
@@ -657,9 +643,11 @@ namespace objectsfm {
 		}
 		else
 		{
-			bool isOK = AbsolutePoseEstimation::AbsolutePoseWithoutFocalLength(pts_w, pts_2d,
-				cam_new->cam_model_, pose_absolute, error_reproj, avg_error, options_.th_mse_localization);
-			if (!isOK)
+			double f_estimated = MAX_(cam_new->cam_model_->h_, cam_new->cam_model_->w_)*1.2;
+			AbsolutePoseEstimation::AbsolutePoseWithoutFocalLength(pts_w, pts_2d,
+				f_estimated, pose_absolute, error_reproj, avg_error);
+
+			if (avg_error > options_.th_mse_localization)
 			{
 				localize_fail_times_[id_img]++;
 
@@ -672,7 +660,7 @@ namespace objectsfm {
 				// write out for debugging
 				std::string path = db_.output_fold_ + "//test_2.txt";
 				std::ofstream ofs(path);
-				ofs << cam_new->cam_model_->f_ << std::endl;
+				ofs << f_estimated << std::endl;
 				ofs << pts_w.size() << std::endl;
 				for (size_t i = 0; i < pts_w.size(); i++)
 				{
@@ -683,6 +671,7 @@ namespace objectsfm {
 
 				return false;
 			}
+			cam_new->SetFocalLength(f_estimated);
 		}
 		cam_new->SetRTPose(pose_absolute.R, pose_absolute.t);
 
@@ -695,7 +684,6 @@ namespace objectsfm {
 			if (error_reproj[i] > avg_error)
 			{
 				pts_[idx_3d]->is_bad_estimated_ = true;
-				//pts_[idx_3d]->ReleaseAll();
 				continue;
 			}
 
@@ -760,7 +748,8 @@ namespace objectsfm {
 
 			// determine the triangulation angle
 			double th_tri_angle = options_.th_angle_small;
-			if (matches.size() > 500) {
+			if (matches.size() > 500)
+			{
 				th_tri_angle = options_.th_angle_large;
 			}
 
@@ -1436,36 +1425,6 @@ namespace objectsfm {
 		}
 	}
 
-	void IncrementalSfM::DrawMatch(int idx1, int idx2, cv::Mat & img)
-	{
-		db_.ReadinImageFeatures(idx1);
-		db_.ReadinImageFeatures(idx2);
-		cv::Mat image1 = cv::imread(db_.image_paths_[idx1]);
-		cv::Mat image2 = cv::imread(db_.image_paths_[idx2]);
-		float ratio1 = db_.image_infos_[idx1]->zoom_ratio;
-		float ratio2 = db_.image_infos_[idx2]->zoom_ratio;
-		//float ratio2 = db_->image_infos_[idx2]->zoom_ratio;
-
-		// query matches
-		std::vector<std::pair<int, int>> matchs_inliers;
-		graph_.QueryMatch(idx1, idx2, matchs_inliers);
-
-
-		int pitch = 128;
-		cv::resize(image1, image1, cv::Size(image1.cols*ratio1, image1.rows*ratio1));
-		cv::resize(image2, image2, cv::Size(image2.cols*ratio2, image2.rows*ratio2));
-		for (size_t m = 0; m < matchs_inliers.size(); m++)
-		{
-			int id_pt1_local = matchs_inliers[m].first;
-			int id_pt2_local = matchs_inliers[m].second;
-			cv::Point2f offset1(image1.cols / 2.0, image1.rows / 2.0);
-			cv::Point2f offset2(image2.cols / 2.0, image2.rows / 2.0);
-			cv::line(image1, db_.keypoints_[idx1]->pts[id_pt1_local].pt + offset1,
-				db_.keypoints_[idx2]->pts[id_pt2_local].pt + offset2, cv::Scalar(0, 0, 255), 1);
-		}
-		img = image1;
-	}
-
 	bool IncrementalSfM::CameraAssociateCameraModel(Camera * cam)
 	{
 		// load the information of the accosiated image
@@ -1477,16 +1436,18 @@ namespace objectsfm {
 			int idx_cam_model = -1;
 			for (size_t i = 0; i < cam_models_.size(); i++)
 			{
-				//if (!db_.image_infos_[cam->id_img_]->f_mm
-				//	|| !(db_.image_infos_[cam->id_img_]->cam_maker.length()
-				//		|| db_.image_infos_[cam->id_img_]->cam_model.length()))
-				//{
-				//	continue;
-				//}
+				if (!db_.image_infos_[cam->id_img_]->f_mm
+					|| !(db_.image_infos_[cam->id_img_]->cam_maker.length()
+						|| db_.image_infos_[cam->id_img_]->cam_model.length()))
+				{
+					continue;
+				}
 
 				if (db_.image_infos_[cam->id_img_]->f_mm == cam_models_[i]->f_mm_
 					&& db_.image_infos_[cam->id_img_]->rows == cam_models_[i]->h_
-					&& db_.image_infos_[cam->id_img_]->cols == cam_models_[i]->w_)
+					&& db_.image_infos_[cam->id_img_]->cols == cam_models_[i]->w_
+					&& (db_.image_infos_[cam->id_img_]->cam_maker == cam_models_[i]->cam_maker_
+					|| db_.image_infos_[cam->id_img_]->cam_model == cam_models_[i]->cam_model_))
 				{
 					idx_cam_model = i;
 					break;
@@ -1616,11 +1577,6 @@ namespace objectsfm {
 			cams_[idx_new_cam]->AddVisibleCamera(idxs_visible_cam[i]);
 			cams_[idxs_visible_cam[i]]->AddVisibleCamera(idx_new_cam);
 		}
-	}
-
-	void IncrementalSfM::UndistortedPts(std::vector<Eigen::Vector2d> pts, std::vector<Eigen::Vector2d> &pts_undistorted, CameraModel* cam_model)
-	{
-		
 	}
 
 }  // namespace objectsfm

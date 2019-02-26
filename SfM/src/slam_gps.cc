@@ -966,7 +966,9 @@ namespace objectsfm {
 
 				it++;
 			}
-			offset_i /= weight_i;
+			offset_i.x /= weight_i;
+			offset_i.y /= weight_i;
+			offset_i.z /= weight_i;
 
 			// averaging as the final result
 			pts_[i]->data[0] += offset_i.x;
@@ -1637,11 +1639,11 @@ namespace objectsfm {
 			cams_[i]->Transformation(R, t, scale);
 		}
 		for (size_t i = 0; i < pts_.size(); i++) {
-			pts_[i]->Transformation(R, t, scale);
+			//pts_[i]->Transformation(R, t, scale);
 		}
 		for (size_t i = 0; i < pts_new_.size(); i++)
 		{
-			pts_new_[i]->Transformation(R, t, scale);
+			//pts_new_[i]->Transformation(R, t, scale);
 		}
 
 		// subtract the offset
@@ -1656,11 +1658,11 @@ namespace objectsfm {
 			cams_[i]->Transformation(R_eye, -gps_offset_, 1.0);
 		}
 		for (size_t i = 0; i < pts_.size(); i++) {
-			pts_[i]->Transformation(R_eye, -gps_offset_, 1.0);
+			//pts_[i]->Transformation(R_eye, -gps_offset_, 1.0);
 		}
 		for (size_t i = 0; i < pts_new_.size(); i++)
 		{
-			pts_new_[i]->Transformation(R_eye, -gps_offset_, 1.0);
+			//pts_new_[i]->Transformation(R_eye, -gps_offset_, 1.0);
 		}
 		for (size_t i = 0; i < cams_gps_.size(); i++)
 		{

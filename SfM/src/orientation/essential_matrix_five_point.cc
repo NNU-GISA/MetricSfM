@@ -47,18 +47,19 @@ namespace objectsfm {
 		}
 		else
 		{
-			int ransac_times = 5;
+			int ransac_times = 100;
 			for (int i=0; i<ransac_times; ++i)
 			{
+				// get random index
+				std::vector<int> idxs;
+				math::RandVectorN(0, num, 5, idxs);
+
 				std::vector<Eigen::Vector2d> image1_points_partial, image2_points_partial;
-				for (int j=0; j<num; ++j)
+				for (int j = 0; j<idxs.size(); ++j)
 				{
-					if (j%ransac_times == i)
-					{
-						continue;
-					}
-					image1_points_partial.push_back(image1_points[j]);
-					image2_points_partial.push_back(image2_points[j]);
+					int idx = idxs[j];
+					image1_points_partial.push_back(image1_points[idx]);
+					image2_points_partial.push_back(image2_points[idx]);
 				}
 
 				if (!FivePointEssentialMatrix(image1_points_partial, image2_points_partial, &essential_matrices))

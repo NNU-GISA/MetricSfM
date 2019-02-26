@@ -40,7 +40,7 @@ void CUDASiftExtractor::Run(cv::Mat & image, ListKeyPoint * keypoints, cv::Mat *
 	float initBlur = 1.0f;
 	float thresh = 1.5f;
 	int noctave = 5; 
-	int th_num_pts = 2 * 32768;
+	int th_num_pts = 32768;
 
 	cudaSift::InitCuda(devNum);
 

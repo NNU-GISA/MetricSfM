@@ -40,10 +40,7 @@ namespace objectsfm {
 			double f, RTPose &pose_absolute, double &error);
 
 		void EPNPRansac(std::vector<Eigen::Vector3d> &pts_w, std::vector<Eigen::Vector2d> &pts_2d,
-			double f, int num_pts_per_iter, int max_iter, RTPose &pose_absolute, double &error);
-
-		bool EPNP(std::vector<Eigen::Vector3d> &pts_w, std::vector<Eigen::Vector2d> &pts_2d,
-			int time_stamp, double f, int num_pts_per_iter, RTPose &pose_absolute);
+			double f, int max_iter, RTPose &pose_absolute, double &error);
 
 		bool EPNP(std::vector<Eigen::Vector3d> &pts_w, std::vector<Eigen::Vector2d> &pts_2d,
 			double f, RTPose &pose_absolute, double &error);

@@ -99,35 +99,34 @@ namespace objectsfm {
 	}
 
 	void AbsolutePoseEPNP::EPNPRansac(std::vector<Eigen::Vector3d>& pts_w, std::vector<Eigen::Vector2d>& pts_2d, 
-		double f, int num_pts_per_iter, int max_iter, RTPose & pose, double & error)
+		double f, int max_iter, RTPose & pose, double & error)
 	{
 		int iter = 0;
 		error = 1000000000.0;
 		while (iter < max_iter)
 		{
+			// get random index
+			std::vector<int> idxs;
+			math::RandVectorN(0, pts_w.size(), 4, idxs);
+
+			std::vector<Eigen::Vector3d> pts_w_partial;
+			std::vector<Eigen::Vector2d> pts_2d_partial;
+			for (int j = 0; j<idxs.size(); ++j)
+			{
+				int idx = idxs[j];
+				pts_w_partial.push_back(pts_w[idx]);
+				pts_2d_partial.push_back(pts_2d[idx]);
+			}
+
 			RTPose pose_temp;
-			if (!EPNP(pts_w, pts_2d, iter, f, num_pts_per_iter, pose_temp))
+			double error_temp;
+			if (!EPNP(pts_w_partial, pts_2d_partial, f, pose_temp, error_temp))
 			{
 				iter++;
 				continue;
 			}
 
-			std::vector<double> error_reproj_temp;
-			Error(pts_w, pts_2d, f, pose_temp, error_reproj_temp);
-
-			double mse = 0.0;
-			int count_inliers = 0;
-			for (size_t i = 0; i < error_reproj_temp.size(); i++)
-			{
-				if (error_reproj_temp[i] < 20.0)
-				{
-					mse += error_reproj_temp[i] * error_reproj_temp[i];
-					count_inliers++;
-				}
-			}
-			double error_temp = std::sqrt(mse / count_inliers);
-
-			if (error_temp < error && count_inliers > 0.7*pts_w.size())
+			if (error_temp < error)
 			{
 				error = error_temp;
 				pose = pose_temp;
@@ -137,62 +136,6 @@ namespace objectsfm {
 		}
 	}
 
-	bool AbsolutePoseEPNP::EPNP(std::vector<Eigen::Vector3d> &pts_w, std::vector<Eigen::Vector2d> &pts_2d,
-		int time_stamp, double f, int num_pts_per_iter, RTPose &pose_absolute)
-	{
-		// 
-		int iter = 0;
-		srand(time_stamp);
-
-		std::vector<Eigen::Vector3d> pts_w_partial;
-		std::vector<Eigen::Vector2d> pts_2d_partial;
-		std::vector<int> idxs;
-		while (idxs.size() != num_pts_per_iter)
-		{
-			int idx = std::rand() % pts_w.size();
-			bool isin = false;
-			for (size_t i = 0; i < idxs.size(); i++)
-			{
-				if (idx == idxs[i])
-				{
-					isin = true;
-					break;
-				}
-			}
-			if (!isin)
-			{
-				idxs.push_back(idx);
-				//std::cout << idx << " ";
-				pts_w_partial.push_back(pts_w[idx]);
-				pts_2d_partial.push_back(pts_2d[idx]);
-			}
-		}
-		if (!CheckPtQuality(pts_2d_partial))
-		{
-			return false;
-		}
-
-		// run epnp
-		set_internal_parameters(0.0, 0.0, f, f);
-		set_maximum_number_of_correspondences(num_pts_per_iter);
-		reset_correspondences();
-		for (int i = 0; i < pts_w_partial.size(); ++i)
-		{
-			add_correspondence(pts_w_partial[i](0), pts_w_partial[i](1), pts_w_partial[i](2), pts_2d_partial[i](0), pts_2d_partial[i](1));
-		}
-
-		double R[3][3], t[3];
-		compute_pose(R, t);
-
-		for (int i = 0; i < 3; ++i) {
-			for (int j = 0; j < 3; ++j) {
-				pose_absolute.R(i, j) = R[i][j];
-			}
-			pose_absolute.t(i) = t[i];
-		}
-
-		return true;
-	}
 
 	bool AbsolutePoseEPNP::EPNP(std::vector<Eigen::Vector3d>& pts_w, std::vector<Eigen::Vector2d>& pts_2d, 
 		double f, RTPose & pose_absolute, double &error)
@@ -201,7 +144,8 @@ namespace objectsfm {
 		set_internal_parameters(0.0, 0.0, f, f);
 		set_maximum_number_of_correspondences(pts_w.size());
 		reset_correspondences();
-		for (int i = 0; i < pts_w.size(); ++i) {
+		for (int i = 0; i < pts_w.size(); ++i)
+		{
 			add_correspondence(pts_w[i](0), pts_w[i](1), pts_w[i](2), pts_2d[i](0), pts_2d[i](1));
 		}
 

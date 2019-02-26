@@ -274,6 +274,9 @@ namespace objectsfm {
 		match_graph.resize(num_imgs_);
 		for (size_t i = 0; i < num_imgs_; i++) {
 			match_graph[i].resize(num_imgs_);
+			for (size_t j = 0; j < num_imgs_; j++) {
+				match_graph[i][j] = 0;
+			}
 		}
 
 		// read in data

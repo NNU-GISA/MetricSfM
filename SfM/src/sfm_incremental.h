@@ -67,8 +67,6 @@ public:
 
 	void ReadTempResultIn(std::string path);
 
-	void DrawMatch(int idx1, int idx2, cv::Mat &img);
-
 private:
 	bool CameraAssociateCameraModel(Camera* cam);
 
@@ -83,8 +81,6 @@ private:
 	void MutableCamsPoints();
 
 	void UpdateVisibleGraph(int idx_new_cam, std::vector<int> idxs_visible_cam);
-
-	void UndistortedPts(std::vector<Eigen::Vector2d> pts, std::vector<Eigen::Vector2d> &pts_undistorted, CameraModel* cam_model);
 
 private:
 	BundleAdjustOptions bundle_full_options_;
