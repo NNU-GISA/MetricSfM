@@ -14,47 +14,46 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#ifndef OBJECTSFM_GRAPH_H_
-#define OBJECTSFM_GRAPH_H_
+#ifndef OBJECTSFM_FINE_MATCHING_GRAPH_H_
+#define OBJECTSFM_FINE_MATCHING_GRAPH_H_
 
 #include <vector>
-
-#include <opencv2\opencv.hpp>   
-#include <opencv2\highgui\highgui.hpp>
+#include <string>
+#include <opencv2/opencv.hpp>
 
 #include "database.h"
 #include "basic_structs.h"
 
 namespace objectsfm {
 
+	class FineMatchingGraph
+	{
+	public:
+		FineMatchingGraph();
+		~FineMatchingGraph();
 
-class Graph
-{
-public:
-	Graph();
-	~Graph();
+		void AssociateDatabase(Database* db);
+		
+		void BuildMatchGraph(std::vector<std::vector<int>> &match_graph_init);
 
-	GraphOptions options_;
+	public:
 
-	void AssociateDatabase(Database* db);
+		std::vector<int> CheckMissingMatchingFile();
 
-	bool BuildGraph();
+		//
+		bool CheckMatchIndexFile();
 
-	void ReadinMatchingGraph();
+		void WriteOutMatches(int idx1, int idx2, std::vector<std::pair<int, int>> &matches);
 
-	void ReleaseMatchingGraph();
+		void WriteOutMatchGraph();
 
-	void QueryMatch(int idx, std::vector<int> &image_ids, std::vector<std::vector<std::pair<int,int>>> &matchs);
-			  
-	void QueryMatch(int idx1, int idx2, std::vector<std::pair<int,int>> &matchs);
+		void RecoverMatchingGraph(std::vector<int> &existing_matches);
 
-	void QueryBestMatch(int idx1, int &idx2, std::vector<std::pair<int, int>> &matchs);
-
-public:
-	Database* db_;
-	int* match_graph_;
-};
-
-}  // namespace objectsfm
-
-#endif  // OBJECTSFM_OBJ_GRAPH_H_
+	public:
+		GraphOptions options_;
+		Database * db_;
+		int num_imgs_;
+		std::vector<std::vector<int>> match_graph;
+	};
+}
+#endif // OBJECTSFM_GRAPH_VIA_COMBINED_H_

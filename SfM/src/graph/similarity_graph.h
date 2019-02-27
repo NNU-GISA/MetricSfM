@@ -14,47 +14,39 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#ifndef OBJECTSFM_GRAPH_H_
-#define OBJECTSFM_GRAPH_H_
+#ifndef OBJECTSFM_SIM_GRAPH_H_
+#define OBJECTSFM_SIM_GRAPH_H_
 
 #include <vector>
-
-#include <opencv2\opencv.hpp>   
-#include <opencv2\highgui\highgui.hpp>
+#include <string>
+#include <opencv2/opencv.hpp>
 
 #include "database.h"
 #include "basic_structs.h"
 
 namespace objectsfm {
 
+	class SimilarityGraph
+	{
+	public:
+		SimilarityGraph();
+		~SimilarityGraph();
 
-class Graph
-{
-public:
-	Graph();
-	~Graph();
+		void AssociateDatabase(Database* db);
+		
+		void BuildSimilarityGraph(int method, std::vector<std::vector<float>> &similarity_matrix);
 
-	GraphOptions options_;
+		// method 1: invreted file
+		void SimilarityGraphInvFile(std::vector<std::vector<float>> &similarity_matrix);
 
-	void AssociateDatabase(Database* db);
+		void GenerateInvertedFile(std::vector<std::vector<int>> &inverted_file);
 
-	bool BuildGraph();
+		// method 2: bow vector distance
+		void SimilarityGraphBowDistance(std::vector<std::vector<float>> &similarity_matrix);
 
-	void ReadinMatchingGraph();
-
-	void ReleaseMatchingGraph();
-
-	void QueryMatch(int idx, std::vector<int> &image_ids, std::vector<std::vector<std::pair<int,int>>> &matchs);
-			  
-	void QueryMatch(int idx1, int idx2, std::vector<std::pair<int,int>> &matchs);
-
-	void QueryBestMatch(int idx1, int &idx2, std::vector<std::pair<int, int>> &matchs);
-
-public:
-	Database* db_;
-	int* match_graph_;
-};
-
-}  // namespace objectsfm
-
-#endif  // OBJECTSFM_OBJ_GRAPH_H_
+	public:
+		Database * db_;
+		int num_imgs_, num_words_;
+	};
+}
+#endif // OBJECTSFM_GRAPH_WORD_NUMBER_H_

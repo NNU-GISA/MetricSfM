@@ -49,7 +49,8 @@ namespace objectsfm {
 		db_.input_fold_ = options_.input_fold;
 		db_.output_fold_ = options_.output_fold;
 		db_.options.feature_type = options_.feature_type;
-		db_.options.resize_image = options_.resize_image;
+		db_.options.resize = options_.resize;
+		db_.options.size_image = options_.size_image;
 		db_.options.feature_type = options_.feature_type;
 		if (!db_.FeatureExtraction())
 		{
@@ -59,7 +60,7 @@ namespace objectsfm {
 		localize_fail_times_ = std::vector<int>(db_.num_imgs_, 0);
 
 		// graph
-		graph_.options_.all_match = options_.all_match;
+		graph_.options_.matching_type = options_.matching_type;
 		graph_.options_.use_bow = options_.use_bow;
 		graph_.options_.th_sim = options_.th_sim;
 		graph_.options_.matching_graph_algorithm = options_.matching_graph_algorithm;

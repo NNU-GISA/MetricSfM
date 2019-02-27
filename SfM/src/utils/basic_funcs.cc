@@ -241,6 +241,17 @@ namespace objectsfm
 
 			R = Rz * Ry*Rx;
 		}
+
+		void RotationMatrixToEulerAngles(Eigen::Matrix3d R, double & rx, double & ry, double & rz)
+		{
+			rx = std::atan2(-R(1, 2), R(2, 2));
+			ry = std::asin(R(0, 2));
+			rz = std::atan2(-R(0, 1), R(0, 0));
+
+			if (rx != rx) { rx = 0.0; }
+			if (ry != ry) { ry = 0.0; }
+			if (rz != rz) { rz = 0.0; }
+		}
 	}
 
 	namespace math
@@ -405,6 +416,118 @@ namespace objectsfm
 			}
 			return sim;
 		}
+
+		void same_in_vectors(std::vector<int>& v1, std::vector<int>& v2, std::vector<int>& vsame)
+		{
+			std::vector<int> v12;
+			v12.resize(v1.size() + v2.size());
+
+			int i = 0, j = 0, k = 0;
+			while (i < v1.size() && j < v2.size())
+			{
+				if (v1[i] < v2[j])
+				{
+					v12[k] = v1[i];
+					i++;
+				}
+				else
+				{
+					v12[k] = v2[j];
+					j++;
+				}
+				k++;
+			}
+			while (i < v1.size())
+			{
+				v12[k] = v1[i];
+				i++;
+				k++;
+			}
+			while (j < v2.size())
+			{
+				v12[k] = v2[j];
+				j++;
+				k++;
+			}
+
+			// unique
+			int v = -1;
+			for (size_t i = 0; i < v12.size(); i++)
+			{
+				if (v12[i] != v)
+				{
+					v = v12[i];
+				}
+				else
+				{
+					vsame.push_back(v);
+				}
+			}
+		}
+
+		std::vector<int> vector_subtract(int num, std::vector<int> data2)
+		{
+			std::sort(data2.begin(), data2.end());
+
+			std::vector<int> data3;
+			for (int i = 0; i < num; i++)
+			{
+				int v1 = i;
+				bool found = false;
+				for (int j = 0; j < data2.size(); j++)
+				{
+					int v2 = data2[j];
+					if (v2 == v1)
+					{
+						found = true;
+						break;
+					}
+					if (v2 > v1)
+					{
+						found = false;
+						break;
+					}
+				}
+				if (!found)
+				{
+					data3.push_back(v1);
+				}
+			}
+			return data3;
+		}
+
+		void vector_avg_denoise(std::vector<float>& data, int &count, float &result)
+		{
+			float avg = 0.0;
+			for (size_t i = 0; i < data.size(); i++) {
+				avg += data[i];
+			}
+			avg /= data.size();
+
+			float sigma = 0.0;
+			for (size_t i = 0; i < data.size(); i++) {
+				sigma += pow(data[i] - avg, 2);
+			}
+			sigma = sqrt(sigma / data.size());
+			if (sigma == 0) {
+				result = avg;
+				count = data.size();
+				return;
+			}
+
+			result = 0.0;
+			count = 0;
+			for (size_t i = 0; i < data.size(); i++)
+			{
+				float t = (data[i] - avg) / sigma;
+				if (t < 2.0) {
+					result += data[i];
+					count++;
+				}
+			}
+			result /= count;
+		}
+
 	}
 
 	void FindCorrespondences(std::vector<int>& v1, std::vector<int>& v2, std::vector<int>& index)
