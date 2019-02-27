@@ -85,13 +85,6 @@ namespace objectsfm {
 
 		// load matching graph
 		graph_.ReadinMatchingGraph();
-		for (size_t i = 0; i < db_.num_imgs_; i++)
-		{
-			for (size_t j = 0; j < db_.num_imgs_; j++)
-			{
-				std::cout << graph_.match_graph_[i*db_.num_imgs_ + j] << " ";
-			}
-		}
 
 		// Try to add as many views as possible to the reconstruction until no more views can be localized.
 		while (true)
@@ -188,16 +181,18 @@ namespace objectsfm {
 				WriteCameraPointsOut(path);
 
 				if (images_added_total%10 == 0)
-				//if (images_added_total >= 31)
 				{
 					std::string path_temp = db_.output_fold_ + "//temp_result" + std::to_string(images_added_total) + ".txt";
 					WriteTempResultOut(path_temp);
-					//exit(0);
 				}
 			}
 			
 			// save the model
 			SaveModel();
+			SaveUndistortedImage();
+			SaveforCMVS();
+			SaveforOpenMVS();
+			ClearModel();
 		}
 		std::cout << "----------Finish Reconstruction" << std::endl;
 	}
@@ -235,6 +230,8 @@ namespace objectsfm {
 			cams_[1] = new Camera;
 			cams_[0]->AssociateImage(id_img1);
 			cams_[1]->AssociateImage(id_img2);
+			cams_[0]->SetID(0);
+			cams_[1]->SetID(1);
 			if (!CameraAssociateCameraModel(cams_[0]))
 			{
 				CameraModel* cam_model_new = new CameraModel(0,
@@ -366,10 +363,6 @@ namespace objectsfm {
 				cam_models_.clear();
 				continue;
 			}
-
-			//std::cout << cams_[0]->id_img_ << std::endl;
-			//std::cout << cams_[1]->id_img_ << std::endl;
-			//exit(0);
 
 			// perform fully bundle adjustment for the seed pair
 			FullBundleAdjustment();
@@ -714,14 +707,15 @@ namespace objectsfm {
 		{
 			cam_models_.push_back(cam_new->cam_model_);
 		}
-		cam_new->cam_model_->AddCamera(cams_.size());
+		cam_new->SetID(cams_.size());
+		cam_new->cam_model_->AddCamera(cam_new->id_);
 		cams_.push_back(cam_new);
 
-		// optimize the pose of the new camera via bundle adjustment
-		if (cam_new->cam_model_->num_cams_ == 1)
-		{
-			SingleBundleAdjustment(cams_.size() - 1);
-		}
+		//// optimize the pose of the new camera via bundle adjustment
+		//if (cam_new->cam_model_->num_cams_ == 1)
+		//{
+		//	SingleBundleAdjustment(cams_.size() - 1);
+		//}
 
 		// update the visible graph of camera
 		UpdateVisibleGraph(cams_.size() - 1, visible_cams);
@@ -1033,7 +1027,7 @@ namespace objectsfm {
 
 	void IncrementalSfM::SaveModel()
 	{
-		std::string fold = db_.output_fold_ + "//" + std::to_string(num_reconstructions_);
+		std::string fold = db_.output_fold_ + "\\" + std::to_string(num_reconstructions_);
 		if (!std::experimental::filesystem::exists(fold))
 		{
 			std::experimental::filesystem::create_directory(fold);
@@ -1081,7 +1075,299 @@ namespace objectsfm {
 			}
 			ofs_cam_pts.close();
 		}
+	}
 
+	void IncrementalSfM::SaveUndistortedImage()
+	{
+		std::string fold = db_.output_fold_ + "\\" + std::to_string(num_reconstructions_);
+		if (!std::experimental::filesystem::exists(fold))
+		{
+			std::experimental::filesystem::create_directory(fold);
+		}
+		std::string fold_image = fold + "\\undistort_image";
+		if (!std::experimental::filesystem::exists(fold_image)) {
+			std::experimental::filesystem::create_directory(fold_image);
+		}
+
+		for (size_t i = 0; i < cams_.size(); i++)
+		{
+			cv::Mat K(3, 3, CV_64FC1);
+			K.at<double>(0, 0) = cams_[i]->cam_model_->f_, K.at<double>(0, 1) = 0.0, K.at<double>(0, 2) = cams_[i]->cam_model_->px_;
+			K.at<double>(1, 0) = 0.0, K.at<double>(1, 1) = cams_[i]->cam_model_->f_, K.at<double>(1, 2) = cams_[i]->cam_model_->py_;
+			K.at<double>(2, 0) = 0.0, K.at<double>(2, 1) = 0.0, K.at<double>(2, 2) = 1.0;
+
+			cv::Mat dist(1, 5, CV_64FC1);
+			dist.at<double>(0, 0) = cams_[i]->cam_model_->k1_;
+			dist.at<double>(0, 1) = cams_[i]->cam_model_->k2_;
+			dist.at<double>(0, 2) = 0.0;
+			dist.at<double>(0, 3) = 0.0;
+			dist.at<double>(0, 4) = 0.0;
+
+			int id_img = cams_[i]->id_img_;
+			std::string path_in = db_.image_paths_[id_img];
+			cv::Mat img = cv::imread(path_in);
+			
+
+			int t = path_in.find_last_of("\\");
+			std::string name = path_in.substr(t + 1, path_in.size() - t);
+			std::string path_out = fold_image + "\\" + name;
+
+			cv::Mat img_undistort;
+			cv::undistort(img, img_undistort, K, dist);
+			cv::imwrite(path_out, img_undistort);
+		}
+	}
+
+	void IncrementalSfM::SaveforOpenMVS()
+	{
+		std::cout << 1 << std::endl;
+		std::string fold = db_.output_fold_ + "\\" + std::to_string(num_reconstructions_);
+		if (!std::experimental::filesystem::exists(fold))
+		{
+			std::experimental::filesystem::create_directory(fold);
+		}
+
+		std::string file_para = fold + "\\sfm_openmvs.txt";
+
+		std::ofstream ff(file_para);
+		ff << std::fixed << std::setprecision(8);
+
+		std::cout << 2 << std::endl;
+		// write out cams
+		ff << cams_.size() << std::endl;
+		for (size_t i = 0; i < cams_.size(); i++)
+		{
+			int id_img = cams_[i]->id_img_;
+			std::string path_i = db_.image_paths_[id_img];
+			int t = path_i.find_last_of("\\");
+			std::string name = path_i.substr(t, path_i.size() - 1 - t);
+
+			ff << name << std::endl;
+			ff << cams_[i]->cam_model_->f_ << std::endl;
+			ff << cams_[i]->pos_rt_.R(0, 0) << " " << cams_[i]->pos_rt_.R(0, 1) << " " << cams_[i]->pos_rt_.R(0, 2) << " "
+				<< cams_[i]->pos_rt_.R(1, 0) << " " << cams_[i]->pos_rt_.R(1, 1) << " " << cams_[i]->pos_rt_.R(1, 2) << " "
+				<< cams_[i]->pos_rt_.R(2, 0) << " " << cams_[i]->pos_rt_.R(2, 1) << " " << cams_[i]->pos_rt_.R(2, 2) << std::endl;
+			ff << cams_[i]->pos_rt_.t(0) << " " << cams_[i]->pos_rt_.t(1) << " " << cams_[i]->pos_rt_.t(2) << std::endl;
+		}
+		std::cout << 3 << std::endl;
+
+		//
+		std::map<int, int> cams_info;
+		for (size_t i = 0; i < cams_.size(); i++) {
+			cams_info.insert(std::pair<int, int>(cams_[i]->id_, i));
+		}
+
+		// write out points
+		int count_good = pts_.size();
+		std::vector<int> num_goods(pts_.size(), 0);
+		for (size_t i = 0; i < pts_.size(); i++)
+		{
+			if (pts_[i]->is_bad_estimated_)
+			{
+				count_good--;
+				continue;
+			}
+
+			auto it1 = pts_[i]->pts2d_.begin();
+			auto it2 = pts_[i]->cams_.begin();
+			int count_t = pts_[i]->pts2d_.size();
+			while (it1 != pts_[i]->pts2d_.end())
+			{
+				int x = it1->second(0) + it2->second->cam_model_->px_;
+				int y = it1->second(1) + it2->second->cam_model_->py_;
+				if (x<0 || x >= it2->second->cam_model_->w_ || y<0 || y >= it2->second->cam_model_->h_)
+				{
+					count_t--;
+				}
+				it1++;
+			}
+
+			num_goods[i] = count_t;
+			if (count_t < 2)
+			{
+				count_good--;
+			}
+		}
+
+		ff << count_good << std::endl;
+		for (size_t i = 0; i < pts_.size(); i++)
+		{
+			if (num_goods[i] < 2 || pts_[i]->is_bad_estimated_)
+			{
+				continue;
+			}
+
+			ff << pts_[i]->data[0] << " " << pts_[i]->data[1] << " " << pts_[i]->data[2] << " ";
+			ff << 255 << " " << 255 << " " << 255 << " ";
+			ff << num_goods[i] << std::endl;
+
+			auto it1 = pts_[i]->pts2d_.begin();
+			auto it2 = pts_[i]->cams_.begin();
+			while (it1 != pts_[i]->pts2d_.end())
+			{
+				int x = it1->second(0) + it2->second->cam_model_->px_;
+				int y = it1->second(1) + it2->second->cam_model_->py_;
+				if (!(x<0 || x >= it2->second->cam_model_->w_ || y<0 || y >= it2->second->cam_model_->h_))
+				{
+					ff << it2->second->id_ << " " << x << " " << y << std::endl;
+				}
+				it1++;  it2++;
+			}
+		}
+		ff.close();
+	}
+
+	void IncrementalSfM::SaveforCMVS()
+	{
+		std::string fold = db_.output_fold_ + "\\" + std::to_string(num_reconstructions_);
+		if (!std::experimental::filesystem::exists(fold))
+		{
+			std::experimental::filesystem::create_directory(fold);
+		}
+
+		int ncluster = cams_.size() / std::min(500, int(cams_.size()));
+		int nstep = cams_.size() / ncluster;
+
+		for (size_t k = 0; k < ncluster; k++)
+		{
+			int cam_ids = k * nstep;
+			int cam_ide = (k + 1) * nstep;
+			if (cam_ide > cams_.size()) {
+				cam_ide = cams_.size();
+			}
+
+			std::string fold_cmvs = fold + "\\cmvs" + std::to_string(k);
+
+			if (!std::experimental::filesystem::exists(fold_cmvs)) {
+				std::experimental::filesystem::create_directory(fold_cmvs);
+			}
+			std::string fold_img = fold_cmvs + "\\visualize";
+			if (!std::experimental::filesystem::exists(fold_img)) {
+				std::experimental::filesystem::create_directory(fold_img);
+			}
+			std::string fold_txt = fold_cmvs + "\\txt";
+			if (!std::experimental::filesystem::exists(fold_txt)) {
+				std::experimental::filesystem::create_directory(fold_txt);
+			}
+			std::string fold_rgb = fold + "\\undistort_image";
+
+			// step0: find pts belonging to the clusters
+			std::vector<int> pt_ids;
+			for (size_t i = 0; i < pts_.size(); i++)
+			{
+				if (pts_[i]->is_bad_estimated_) {
+					continue;
+				}
+
+				auto it = pts_[i]->cams_.begin();
+				while (it != pts_[i]->cams_.end())
+				{
+					int id_cam = it->second->id_;
+					if (id_cam >= cam_ids && id_cam < cam_ide) {
+						pt_ids.push_back(i);
+						break;
+					}
+					it++;
+				}
+			}
+
+
+			// step1: save bundle
+			std::string file_para = fold_cmvs + "\\bundle.rd.out";
+
+			//
+			std::ofstream ff(file_para);
+			ff << std::fixed << std::setprecision(8);
+
+			// cams
+			ff << "# Bundle file v0.3" << std::endl;
+			ff << cam_ide - cam_ids << " " << pt_ids.size() << std::endl;
+			for (size_t i = cam_ids; i < cam_ide; i++)
+			{
+				ff << cams_[i]->cam_model_->f_ << " " << cams_[i]->cam_model_->k1_ << " " << cams_[i]->cam_model_->k2_ << std::endl;
+				ff << cams_[i]->pos_rt_.R(0, 0) << " " << cams_[i]->pos_rt_.R(0, 1) << " " << cams_[i]->pos_rt_.R(0, 2) << " "
+					<< cams_[i]->pos_rt_.R(1, 0) << " " << cams_[i]->pos_rt_.R(1, 1) << " " << cams_[i]->pos_rt_.R(1, 2) << " "
+					<< cams_[i]->pos_rt_.R(2, 0) << " " << cams_[i]->pos_rt_.R(2, 1) << " " << cams_[i]->pos_rt_.R(2, 2) << std::endl;
+				ff << cams_[i]->pos_rt_.t(0) << " " << cams_[i]->pos_rt_.t(1) << " " << cams_[i]->pos_rt_.t(2) << std::endl;
+			}
+
+			// points
+			for (size_t i = 0; i < pt_ids.size(); i++)
+			{
+				int pt_id = pt_ids[i];
+				ff << pts_[pt_id]->data[0] << " " << pts_[pt_id]->data[1] << " " << pts_[pt_id]->data[2] << " ";
+				ff << 255 << " " << 255 << " " << 255 << " ";
+				int count_cams = 0;
+				auto it = pts_[pt_id]->cams_.begin();
+				while (it != pts_[pt_id]->cams_.end())
+				{
+					int id_cam = it->second->id_;					
+					if (id_cam >= cam_ids && id_cam < cam_ide) {
+						count_cams++;
+					}
+					it++;
+				}
+				ff << count_cams << std::endl;
+
+				auto it1 = pts_[pt_id]->pts2d_.begin();
+				auto it2 = pts_[pt_id]->cams_.begin();
+				while (it1 != pts_[pt_id]->pts2d_.end())
+				{
+					int idx_pt = it1->first;
+					int idx_cam = it2->second->id_;
+					if (idx_cam >= cam_ids && idx_cam < cam_ide) {
+						int x = it1->second(0);
+						int y = it1->second(1);
+						ff << idx_cam - cam_ids << " " << idx_pt << " " << float(x) << " " << float(y) << std::endl;
+					}
+					it1++;  it2++;
+				}
+			}
+			ff.close();
+
+			// step2: save txt and image
+			for (size_t i = cam_ids; i < cam_ide; i++)
+			{
+				std::string name = std::to_string(i - cam_ids);
+				name = std::string(8 - name.length(), '0') + name;
+
+				// txt
+				Eigen::Matrix3d R = cams_[i]->pos_rt_.R;
+				Eigen::Vector3d t = cams_[i]->pos_rt_.t;
+				cv::Mat M = (cv::Mat_<double>(3, 4) << R(0, 0), R(0, 1), R(0, 2), t(0),
+					R(1, 0), R(1, 1), R(1, 2), t(1),
+					R(2, 0), R(2, 1), R(2, 2), t(2));
+				cv::Mat K = (cv::Mat_<double>(3, 3) << cams_[i]->cam_model_->f_, 0, cams_[i]->cam_model_->px_,
+					0, cams_[i]->cam_model_->f_, cams_[i]->cam_model_->py_,
+					0, 0, 1);
+				cv::Mat P = K * M;
+
+				std::ofstream ff(fold_txt + "\\" + name + ".txt");
+				ff << std::fixed << std::setprecision(8);
+				ff << "CONTOUR" << std::endl;
+				for (size_t m = 0; m < 3; m++) {
+					for (size_t n = 0; n < 4; n++) {
+						ff << P.at<double>(m, n) << " ";
+					}
+					ff << std::endl;
+				}
+				ff.close();
+
+				// image
+				int id_img = cams_[i]->id_img_;
+				std::string path_in = db_.image_paths_[id_img];
+				int tt = path_in.find_last_of("\\");
+				std::string img_name = path_in.substr(tt + 1, path_in.size() - tt);
+				std::string file_img_in = fold_rgb + "\\" + img_name;
+				std::string file_img_out = fold_img + "\\" + name + ".jpg";
+				cv::Mat img = cv::imread(file_img_in);
+				cv::imwrite(file_img_out, img);
+			}
+		}
+	}
+
+	void IncrementalSfM::ClearModel()
+	{
 		// clearn current results
 		for (size_t i = 0; i < pts_.size(); i++)
 		{
@@ -1107,6 +1393,7 @@ namespace objectsfm {
 
 		num_reconstructions_++;
 	}
+
 
 	void IncrementalSfM::WriteCameraPointsOut(std::string path)
 	{

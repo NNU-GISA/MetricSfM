@@ -61,11 +61,20 @@ public:
 
 	void SaveModel();
 
+	void SaveUndistortedImage();
+
+	void SaveforOpenMVS();
+
+	void SaveforCMVS();
+
+	void ClearModel();
+
 	void WriteCameraPointsOut(std::string path);
 
 	void WriteTempResultOut(std::string path);
 
 	void ReadTempResultIn(std::string path);
+
 
 private:
 	bool CameraAssociateCameraModel(Camera* cam);
