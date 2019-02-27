@@ -45,7 +45,7 @@ if (OPENMP_FOUND)
 endif()
 
 # OpenCV
-#set(OpenCV_DIR "F:/DevelopCenter/ThirdParty/opencv-2.4.13.6/build")  # change the path that your fold containing OpenCVConfig.cmake
+set(OpenCV_DIR "F:/DevelopCenter/ThirdParty/opencv-2.4.13.6/build")  # change the path that your fold containing OpenCVConfig.cmake
 find_package(OpenCV REQUIRED)
 
 # Ceres
