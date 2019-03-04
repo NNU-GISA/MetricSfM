@@ -31,6 +31,7 @@
 
 #include "feature/feature_extractor_vl_sift.h"
 #include "feature/feature_extractor_cuda_sift.h"
+#include "feature/feature_extractor_sift_gpu.h"
 
 #include "utils/converter_utm_latlon.h"
 #include "utils/local_orientation.h"
@@ -322,6 +323,8 @@ void Database::ExtractImageFeatures(int idx)
 	else
 	{
 		CUDASiftExtractor::Run(img, keypoints_[idx], descriptors_[idx]);
+		//SIFTGPUExtractor::Run(image_paths_[idx], keypoints_[idx], descriptors_[idx]);
+		//SIFTGPUExtractor::Run(img, keypoints_[idx], descriptors_[idx]);
 	}
 
 	if (idx % 5 == 0)

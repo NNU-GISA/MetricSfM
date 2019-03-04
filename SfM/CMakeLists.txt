@@ -57,7 +57,14 @@ find_package(Eigen3 CONFIG REQUIRED)
 # flann
 find_package(flann REQUIRED)
 
-# Boost
+# GLUT
+find_package(GLUT REQUIRED)
+
+# OpenGL
+find_package(OpenGL REQUIRED)
+
+# Glew
+find_package(Glew)
 
 # Generate lib for current project
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib)
@@ -73,6 +80,7 @@ ${EIGEN3_INCLUDE_DIRS}
 ${CERES_INCLUDE_DIRS}
 ${VLFEAT_INCLUDE_DIRS}
 ${CUDASIFT_INCLUDE_DIRS}
+${SIFTGPU_INCLUDE_DIRS}
 ${FBOW_INCLUDE_DIRS}
 )
 
@@ -116,9 +124,10 @@ ${Orientation_HDRS}  ${Orientation_SRCS}
 ${Utils_HDRS}        ${Utils_SRCS}
 )
 target_link_libraries(SFMLib legacy_stdio_definitions.lib shlwapi.lib
-${CMAKE_DL_LIBS} ${OpenCV_LIBS} ${CERES_LIBRARIES} ${FLANN_LIBRARIES} ${GLOG_LIBRARIES})
+${CMAKE_DL_LIBS} ${OpenCV_LIBS} ${CERES_LIBRARIES} ${FLANN_LIBRARIES} ${GLUT_LIBRARIES} ${GLEW_LIBRARIES}) #${GLOG_LIBRARIES} 
 target_link_libraries(SFMLib debug ${VLFEAT_LIBRARIES_DEBUG} optimized ${VLFEAT_LIBRARIES_RELEASE})
 target_link_libraries(SFMLib debug ${CUDASIFT_LIBRARIES_DEBUG} optimized ${CUDASIFT_LIBRARIES_RELEASE})
+target_link_libraries(SFMLib debug ${SIFTGPU_LIBRARIES_DEBUG} optimized ${SIFTGPU_LIBRARIES_RELEASE})
 target_link_libraries(SFMLib debug ${FBOW_LIBRARIES_DEBUG} optimized ${FBOW_LIBRARIES_RELEASE})
 
 ## CUDA SGM

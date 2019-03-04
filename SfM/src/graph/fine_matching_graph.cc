@@ -39,7 +39,8 @@ namespace objectsfm {
 
 	void FineMatchingGraph::BuildMatchGraph(std::vector<std::vector<int>> &match_graph_init)
 	{
-		float thRatio = 0.5;
+		float thRatio_good = 0.6;
+		float thRatio_all = 0.85;
 		float thDis = 0.2;
 
 		num_imgs_ = db_->num_imgs_;
@@ -57,6 +58,7 @@ namespace objectsfm {
 		for (size_t i = 0; i < messing_matches.size(); i++)
 		{
 			int idx1 = messing_matches[i];
+			//idx1 = 22;
 			std::cout << "---Matching images " << idx1 << "/" << num_imgs_ << std::endl;
 
 			std::vector<int> set_idx2 = match_graph_init[idx1];
@@ -82,6 +84,7 @@ namespace objectsfm {
 			std::cout << idx1 << "  knn querying ..." << std::endl;
 			std::vector<int*> knn_id(set_idx2.size());
 			std::vector<float*> knn_dis(set_idx2.size());
+#pragma omp parallel for
 			for (int j = 0; j < set_idx2.size(); j++)
 			{
 				int idx2 = set_idx2[j];
@@ -104,32 +107,51 @@ namespace objectsfm {
 				int num2 = db_->keypoints_[idx2]->pts.size();
 
 				// the inital matches
-				std::vector<std::pair<int, int>> matches;
-				std::vector<cv::Point2f> pt1, pt2;
+				std::vector<std::pair<int, int>> matches_good;
+				std::vector<std::pair<int, int>> matches_all;
+				std::vector<cv::Point2f> pt1_good, pt2_good;
+				std::vector<cv::Point2f> pt1_all, pt2_all;
 				int* ptr_id = knn_id[j];
 				float* ptr_dis = knn_dis[j];
 				for (size_t m = 0; m < num2; m++)
 				{
 					float ratio = ptr_dis[0] / ptr_dis[1];
-					if (ratio < thRatio && ptr_dis[0] < thDis) {
-						pt1.push_back(db_->keypoints_[idx1]->pts[ptr_id[0]].pt);
-						pt2.push_back(db_->keypoints_[idx2]->pts[m].pt);
-						matches.push_back(std::pair<int, int>(ptr_id[0], m));
+					if (ratio < thRatio_good) {
+						pt1_good.push_back(db_->keypoints_[idx1]->pts[ptr_id[0]].pt);
+						pt2_good.push_back(db_->keypoints_[idx2]->pts[m].pt);
+						matches_good.push_back(std::pair<int, int>(ptr_id[0], m));  // ptid1 ptid2
 					}
+
+					if (ratio < thRatio_all) {
+						pt1_all.push_back(db_->keypoints_[idx1]->pts[ptr_id[0]].pt);
+						pt2_all.push_back(db_->keypoints_[idx2]->pts[m].pt);
+						matches_all.push_back(std::pair<int, int>(ptr_id[0], m));  // ptid1 ptid2
+					}
+
 					ptr_id += 2;
 					ptr_dis += 2;
 				}
-
-				// geo-verification via flow
-				std::vector<int> match_inliers;
-				//bool isOK = GeoVerification::GeoVerificationLocalFlow(pt1, pt2, match_inliers);
-				bool isOK = GeoVerification::GeoVerificationFundamental(pt1, pt2, match_inliers);
-				//bool isOK = GeoVerification::GeoVerificationPatchFundamental(pt1, pt2, match_inliers);
-				db_->ReleaseImageFeatures(idx2);
 				delete[] knn_id[j];
 				delete[] knn_dis[j];
 
-				std::cout << idx1 << "  " << idx2 << "   matches: " << match_inliers.size() << std::endl;
+				// geo-verification
+				cv::Mat FMatrix;
+				std::vector<int> index_inliers;
+				//bool isOK = GeoVerification::GeoVerificationLocalFlow(pt1, pt2, match_inliers);
+				bool isOK = GeoVerification::GeoVerificationFundamental(pt1_good, pt2_good, index_inliers, FMatrix);
+				//bool isOK = GeoVerification::GeoVerificationPatchFundamental(pt1_good, pt2_good, index_inliers);
+
+				// matching filtering with F
+				if (isOK) {
+					GeoVerification::GeoVerificationFundamental(pt1_all, pt2_all, FMatrix, index_inliers);
+				}
+				db_->ReleaseImageFeatures(idx2);
+				std::cout << idx1 << "  " << idx2 << "   matches: " << index_inliers.size() << std::endl;
+				std::vector<std::pair<int, int>> matches_inliers;
+				for (size_t m = 0; m < index_inliers.size(); m++) {
+					matches_inliers.push_back(matches_all[index_inliers[m]]);
+				}
+
 
 				// draw
 				if (0)
@@ -143,24 +165,24 @@ namespace objectsfm {
 					int pitch = 128;
 					cv::resize(image1, image1, cv::Size(image1.cols*ratio1, image1.rows*ratio1));
 					cv::resize(image2, image2, cv::Size(image2.cols*ratio2, image2.rows*ratio2));
-					for (size_t m = 0; m < match_inliers.size(); m++)
+					for (size_t m = 0; m < index_inliers.size(); m++)
 					{
-						int idx = match_inliers[m];
-						int id_pt1_local = matches[idx].first;
-						int id_pt2_local = matches[idx].second;
+						int idx = index_inliers[m];
+						int id_pt1_local = matches_all[idx].first;
+						int id_pt2_local = matches_all[idx].second;
 						cv::Point2f offset1(image1.cols / 2.0, image1.rows / 2.0);
 						cv::Point2f offset2(image2.cols / 2.0, image2.rows / 2.0);
 						cv::line(image1, db_->keypoints_[idx1]->pts[id_pt1_local].pt + offset1,
 							db_->keypoints_[idx2]->pts[id_pt2_local].pt + offset2, cv::Scalar(0,0,255), 1);
 					}
-					std::string path = "F:\\" + std::to_string(idx2) + "cuda.jpg";
+					std::string path = "F:\\" + std::to_string(idx1) + "_" + std::to_string(idx2) + "cuda.jpg";
 					cv::imwrite(path, image1);
 				}
 
 				if (isOK)
 				{
-					WriteOutMatches(idx1, idx2, matches);
-					match_graph[idx1][idx2] = matches.size();
+					WriteOutMatches(idx1, idx2, matches_inliers);
+					match_graph[idx1][idx2] = matches_inliers.size();
 				}
 			}
 

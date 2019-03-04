@@ -509,7 +509,8 @@ namespace objectsfm {
 
 				// do geo-verification
 				std::vector<int> inliers;
-				bool isOK = GeoVerification::GeoVerificationFundamental(pts1_init, pts2_init, inliers);
+				cv::Mat F;
+				bool isOK = GeoVerification::GeoVerificationFundamental(pts1_init, pts2_init, inliers, F);
 				std::vector<std::pair<int, int>> match_inliers;
 				for (size_t m = 0; m < inliers.size(); m++) {
 					match_inliers.push_back(matches[j][inliers[m]]);

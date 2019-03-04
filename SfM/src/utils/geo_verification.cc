@@ -27,7 +27,8 @@ namespace objectsfm
 	{
 	}
 
-	bool GeoVerification::GeoVerificationFundamental(std::vector<cv::Point2f>& pt1, std::vector<cv::Point2f>& pt2, std::vector<int>& match_inliers)
+	bool GeoVerification::GeoVerificationFundamental(std::vector<cv::Point2f>& pt1, std::vector<cv::Point2f>& pt2, 
+		std::vector<int>& match_inliers, cv::Mat &FMatrix)
 	{
 		if (pt1.size() < 30) {
 			return false;
@@ -40,9 +41,9 @@ namespace objectsfm
 		//	return false;
 		//}
 
-		float th_epipolar1 = 2.0;
+		float th_epipolar1 = 3.0;
 		std::vector<uchar> ransac_status1(pt1.size());
-		cv::findFundamentalMat(pt1, pt2, ransac_status1, cv::FM_RANSAC, th_epipolar1);
+		FMatrix = cv::findFundamentalMat(pt1, pt2, ransac_status1, cv::FM_RANSAC, th_epipolar1);
 		for (size_t i = 0; i < ransac_status1.size(); i++) {
 			if (ransac_status1[i]) {
 				match_inliers.push_back(i);
@@ -53,6 +54,27 @@ namespace objectsfm
 			return false;
 		}
 
+		return true;
+	}
+
+	bool GeoVerification::GeoVerificationFundamental(std::vector<cv::Point2f>& pt1, std::vector<cv::Point2f>& pt2, 
+		cv::Mat FMatrix, std::vector<int>& match_inliers)
+	{
+		match_inliers.clear();
+
+		double th_epi = 3.0;
+		for (size_t i = 0; i < pt1.size(); i++)
+		{
+			cv::Mat pt1_m = (cv::Mat_<double>(3, 1) << pt1[i].x, pt1[i].y, 1.0);
+			cv::Mat pt2_m = (cv::Mat_<double>(3, 1) << pt2[i].x, pt2[i].y, 1.0);
+			cv::Mat l1 = FMatrix * pt1_m;
+			double n = std::sqrt(std::pow(l1.at<double>(0,0), 2) + std::pow(l1.at<double>(1,0), 2));
+			l1 /= n;
+			double dis = l1.dot(pt2_m);
+			if (abs(dis) < th_epi) {
+				match_inliers.push_back(i);
+			}
+		}
 		return true;
 	}
 

@@ -14,34 +14,26 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#ifndef OBJECTSFM_GEO_VERIFICATION_H_
-#define OBJECTSFM_GEO_VERIFICATION_H_
+#ifndef OBJECTSFM_FEATURE_EXTRACTOR_SIFTGPU_H_
+#define OBJECTSFM_FEATURE_EXTRACTOR_SIFTGPU_H_
 
 #include <vector>
 #include <string>
 #include <opencv2/opencv.hpp>
 
-namespace objectsfm 
-{
-	class GeoVerification
+#include "basic_structs.h"
+
+namespace objectsfm {
+
+	class SIFTGPUExtractor
 	{
 	public:
-		GeoVerification();
-		~GeoVerification();
+		SIFTGPUExtractor();
+		~SIFTGPUExtractor();
 
-		static bool GeoVerificationFundamental(std::vector<cv::Point2f>& pt1, std::vector<cv::Point2f>& pt2,
-			std::vector<int>& match_inliers, cv::Mat &FMatrix);
+		static void Run(std::string img_path, ListKeyPoint* keypoints, cv::Mat* descriptors);
 
-		static bool GeoVerificationFundamental(std::vector<cv::Point2f>& pt1, std::vector<cv::Point2f>& pt2,
-			cv::Mat FMatrix, std::vector<int>& match_inliers);
-
-		static bool GeoVerificationLocalFlow(std::vector<cv::Point2f>& pt1, std::vector<cv::Point2f>& pt2,
-			std::vector<int>& match_inliers);
-
-		static bool GeoVerificationPatchFundamental(std::vector<cv::Point2f>& pt1, std::vector<cv::Point2f>& pt2,
-			std::vector<int>& match_inliers);
+		static void Run(cv::Mat &image, ListKeyPoint* keypoints, cv::Mat* descriptors);
 	};
-
-
 }
-#endif //OBJECTSFM_CAMERA_CALIBRATION_H_
+#endif // OBJECTSFM_FEATURE_EXTRACTOR_CUDASIFT_H_

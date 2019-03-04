@@ -266,7 +266,8 @@ namespace objectsfm {
 					pts2.push_back(db_->keypoints_[idx2]->pts[index2].pt);
 				}
 
-				if (!GeoVerification::GeoVerificationFundamental(pts1, pts2, match_init_inliers)) {
+				cv::Mat F;
+				if (!GeoVerification::GeoVerificationFundamental(pts1, pts2, match_init_inliers, F)) {
 					continue;
 				}
 

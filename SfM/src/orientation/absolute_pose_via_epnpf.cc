@@ -36,7 +36,7 @@ namespace objectsfm {
 		RTPose & pose_absolute, double &error)
 	{
 		int num_pts_per_iter = 5;
-		int max_iter = 100;
+		int max_iter = 200;
 		double f_init = f;
 		double f_ratio_step = 0.01;
 

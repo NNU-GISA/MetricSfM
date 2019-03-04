@@ -49,7 +49,7 @@ namespace objectsfm {
 		}
 		else
 		{
-			int ransac_times = 100;
+			int ransac_times = 200;
 			for (int i=0; i<ransac_times; ++i)
 			{
 				// get random index

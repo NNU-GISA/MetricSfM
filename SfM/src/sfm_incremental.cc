@@ -85,6 +85,15 @@ namespace objectsfm {
 
 		// load matching graph
 		graph_.ReadinMatchingGraph();
+		for (size_t i = 0; i < db_.num_imgs_; i++)
+		{
+			std::cout << i << std::endl;
+			for (size_t j = 0; j < db_.num_imgs_; j++)
+			{
+				std::cout << graph_.match_graph_[i * db_.num_imgs_ + j] << " ";
+			}
+			std::cout << std::endl;
+		}
 
 		// Try to add as many views as possible to the reconstruction until no more views can be localized.
 		while (true)
@@ -118,6 +127,13 @@ namespace objectsfm {
 				std::vector<std::vector<std::pair<int, int>>> corres_2d3d;
 				std::vector<std::vector<int>> visible_cams;
 				FindImageToLocalize(image_ids, corres_2d3d, visible_cams);
+				std::cout << "FindImageToLocalize" << std::endl;
+				std::cout << image_ids.size() << std::endl;
+				for (size_t i = 0; i < image_ids.size(); i++)
+				{
+					std::cout << image_ids[i] << " " << std::endl;
+				}
+
 				if (!image_ids.size())
 				{
 					break;
@@ -175,6 +191,14 @@ namespace objectsfm {
 					is_img_processed_[cams_[i]->id_img_] = 1;
 				}
 				std::cout << "Cameras " << cams_.size() << "   Models " << cam_models_.size() << std::endl;
+				std::cout << db_.image_paths_[cams_[cams_.size()-1]->id_img_] << std::endl;
+				if (cams_.size() >= 20)
+				{
+					for (size_t k = 0; k < image_ids.size(); k++)
+					{
+						std::cout << image_ids[k] << " ";
+					}
+				}
 
 				// write out
 				std::string path = db_.output_fold_ + "//pts" + std::to_string(images_added_total) + ".txt";
@@ -186,7 +210,7 @@ namespace objectsfm {
 					WriteTempResultOut(path_temp);
 				}
 			}
-			
+
 			// save the model
 			SaveModel();
 			SaveUndistortedImage();
@@ -223,6 +247,7 @@ namespace objectsfm {
 			// load correspondences
 			std::vector<std::pair<int, int>> matches;
 			graph_.QueryMatch(id_img1, id_img2, matches);
+			std::cout << id_img1 << " " << id_img2 << " " << matches.size() << std::endl;
 
 			// initial camera
 			cams_.resize(2);
@@ -428,6 +453,7 @@ namespace objectsfm {
 			{
 				int id_img_j = j;
 
+				//std::cout << id_img_i << " " << id_img_j << " " << graph_.match_graph_[id_img_i*num_imgs + id_img_j] << std::endl;
 				if (graph_.match_graph_[id_img_i*num_imgs+id_img_j] > 0 && is_img_processed_[id_img_j])
 				{
 					// find the reference camera
@@ -443,6 +469,7 @@ namespace objectsfm {
 					graph_.QueryMatch(id_img_i, id_img_j, corres_2d2d_ij);
 					if (!corres_2d2d_ij.size())
 					{
+						//std::cout << 22222 << std::endl;
 						continue;
 					}
 

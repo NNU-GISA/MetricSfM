@@ -40,12 +40,12 @@ void CUDASiftExtractor::Run(cv::Mat & image, ListKeyPoint * keypoints, cv::Mat *
 	float initBlur = 1.0f;
 	float thresh = 1.5f;
 	int noctave = 5; 
-	int th_num_pts = 32768;
+	int th_num_pts = 60000;
 
 	cudaSift::InitCuda(devNum);
 
 	cudaSift::SiftData *siftdata = new cudaSift::SiftData;
-	cudaSift::InitSiftData(*siftdata, 32768, true, true);
+	cudaSift::InitSiftData(*siftdata, 32768 * 2, true, true);
 	siftdata->stream = 0;
 
 	cudaSift::Image img;
@@ -56,7 +56,7 @@ void CUDASiftExtractor::Run(cv::Mat & image, ListKeyPoint * keypoints, cv::Mat *
 	cudaSift::ExtractSift(*siftdata, img, noctave, initBlur, thresh, 0.0f, false);
 	while (siftdata->numPts > th_num_pts)
 	{
-		thresh *= 2.0;
+		thresh *= 1.5;
 		cudaSift::ExtractSift(*siftdata, img, noctave, initBlur, thresh, 0.0f, false);
 	}
 

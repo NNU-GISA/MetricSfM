@@ -15,6 +15,10 @@ set(CUDASIFT_INCLUDE_DIRS ${PROJECT_SOURCE_DIR}/thirdparty/cudasift/include CACH
 set(CUDASIFT_LIBRARIES_DEBUG ${PROJECT_SOURCE_DIR}/thirdparty/cudasift/lib/cudaSiftd.lib CACHE PATH "" FORCE)
 set(CUDASIFT_LIBRARIES_RELEASE ${PROJECT_SOURCE_DIR}/thirdparty/cudasift/lib/cudaSiftr.lib CACHE PATH "" FORCE)
 
+set(SIFTGPU_INCLUDE_DIRS ${PROJECT_SOURCE_DIR}/thirdparty/siftgpu/include CACHE PATH "" FORCE)
+set(SIFTGPU_LIBRARIES_DEBUG ${PROJECT_SOURCE_DIR}/thirdparty/siftgpu/lib/siftgpud.lib CACHE PATH "" FORCE)
+set(SIFTGPU_LIBRARIES_RELEASE ${PROJECT_SOURCE_DIR}/thirdparty/siftgpu/lib/siftgpur.lib CACHE PATH "" FORCE)
+
 # set boost 
 #set(MY_BOOST_PATH "F:/DevelopCenter/ThirdParty/boost_1_65_0") # change the path to yout fold of boost
 #set(BOOST_ROOT ${MY_BOOST_PATH} CACHE PATH "" FORCE)

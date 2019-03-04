@@ -34,7 +34,7 @@ void convert(std::string file_in, std::string file_out, int idd)
 {
 	std::ifstream ifstr(file_in);
 	std::ofstream ofstr(file_out);
-	ofstr << std::fixed << std::setprecision(8);
+	//ofstr << std::fixed << std::setprecision(8);
 	while (1) {
 		unsigned char uctmp;
 		ifstr.read((char*)&uctmp, sizeof(unsigned char));

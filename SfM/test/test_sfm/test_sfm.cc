@@ -24,8 +24,8 @@ void main(void)
 	objectsfm::IncrementalSfM incremental_sfm;
 
 	std::string mode = "UAV"; // WEB, UAV 
-	incremental_sfm.options_.input_fold  = "C:\\Users\\lu.2037\\Desktop\\geotagged-images\\image";
-	incremental_sfm.options_.output_fold = "C:\\Users\\lu.2037\\Desktop\\geotagged-images\\result";
+	incremental_sfm.options_.input_fold  = "C:\\Users\\lu.2037\\Downloads\\geotagged-images\\image";
+	incremental_sfm.options_.output_fold = "C:\\Users\\lu.2037\\Downloads\\geotagged-images\\result";
 	incremental_sfm.options_.use_bow = true;
 	incremental_sfm.options_.num_image_voc = 500;
 	incremental_sfm.options_.size_image = 4000*3000;
@@ -40,7 +40,7 @@ void main(void)
 		incremental_sfm.options_.resize = false;
 		incremental_sfm.options_.feature_type = "CUDASIFT"; // VLSIFT CUDASIFT CUDAASIFT
 		incremental_sfm.options_.use_same_camera = false;
-		incremental_sfm.options_.th_max_new_add_pts = 200;
+		incremental_sfm.options_.th_max_new_add_pts = 1000;
 		incremental_sfm.options_.th_mse_localization = 7.0;
 		incremental_sfm.options_.th_mse_reprojection = 3.0;
 		incremental_sfm.options_.th_mse_outliers = 1.0;
@@ -49,7 +49,7 @@ void main(void)
 	{
 		incremental_sfm.options_.matching_type = "all";
 		incremental_sfm.options_.resize = false;
-		incremental_sfm.options_.feature_type = "CUDASIFT"; // VLSIFT CUDASIFT CUDAASIFT
+		incremental_sfm.options_.feature_type = "VLSIFT"; // VLSIFT CUDASIFT CUDAASIFT
 		incremental_sfm.options_.use_same_camera = true;
 		incremental_sfm.options_.th_max_new_add_pts = 20000;
 		incremental_sfm.options_.th_mse_localization = 7.0;

@@ -43,7 +43,7 @@ namespace objectsfm {
 		std::vector<Eigen::Vector2d>& pts_2d, double f, RTPose & pose_absolute, std::vector<double> &errors, double &avg_error)
 	{
 		int num_pts_per_iter = 5;
-		int max_iter = 100;
+		int max_iter = 200;
 		double error = 0.0;
 
 		AbsolutePoseEPNP epnp;
